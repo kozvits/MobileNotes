@@ -1,0 +1,34 @@
+package com.mobilenotes.app.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import com.mobilenotes.app.data.local.entity.FolderEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface FolderDao {
+
+    @Query("SELECT * FROM folders ORDER BY name ASC")
+    fun getAllFolders(): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM folders WHERE id = :id")
+    suspend fun getFolderById(id: String): FolderEntity?
+
+    @Query("SELECT * FROM folders WHERE parentId = :parentId ORDER BY name ASC")
+    fun getChildFolders(parentId: String): Flow<List<FolderEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFolder(folder: FolderEntity)
+
+    @Delete
+    suspend fun deleteFolder(folder: FolderEntity)
+
+    @Query("DELETE FROM folders WHERE id = :id")
+    suspend fun deleteFolderById(id: String)
+
+    @Query("UPDATE folders SET name = :name WHERE id = :id")
+    suspend fun renameFolder(id: String, name: String)
+}

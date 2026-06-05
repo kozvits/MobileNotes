@@ -1,0 +1,50 @@
+package com.mobilenotes.app.presentation.navigation
+
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.runtime.Composable
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.mobilenotes.app.presentation.editor.EditorScreen
+import com.mobilenotes.app.presentation.home.HomeScreen
+
+@Composable
+fun NavGraph(navController: NavHostController) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        enterTransition = { fadeIn(animationSpec = tween(300)) },
+        exitTransition = { fadeOut(animationSpec = tween(300)) }
+    ) {
+        composable(Screen.Home.route) {
+            HomeScreen(
+                onNavigateToEditor = { noteId -> navController.navigate(Screen.Editor.createRoute(noteId)) },
+                onNavigateToSearch = { navController.navigate(Screen.Search.route) },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToFolders = { navController.navigate(Screen.Folders.route) },
+                onNavigateToTags = { navController.navigate(Screen.Tags.route) },
+                onNavigateToTrash = { navController.navigate(Screen.Trash.route) }
+            )
+        }
+
+        composable(
+            route = Screen.Editor.route,
+            arguments = listOf(navArgument("noteId") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            })
+        ) { backStackEntry ->
+            val noteId = backStackEntry.arguments?.getString("noteId")
+            EditorScreen(
+                noteId = noteId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+    }
+}
