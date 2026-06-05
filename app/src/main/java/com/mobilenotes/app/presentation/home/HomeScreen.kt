@@ -1,6 +1,5 @@
 package com.mobilenotes.app.presentation.home
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
@@ -33,19 +31,15 @@ import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismiss
-import androidx.compose.material3.SwipeToDismissValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberSwipeToDismissState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,7 +57,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToEditor: (String?) -> Unit = {},
@@ -207,7 +200,7 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NoteListItem(
     note: Note,
@@ -215,97 +208,56 @@ private fun NoteListItem(
     onDelete: () -> Unit,
     onTogglePin: () -> Unit
 ) {
-    val dismissState = rememberSwipeToDismissState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissValue.EndToStart) {
-                onDelete()
-                true
-            } else if (value == SwipeToDismissValue.StartToEnd) {
-                onTogglePin()
-                true
-            } else false
-        }
-    )
-
-    SwipeToDismiss(
-        state = dismissState,
-        background = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentAlignment = when (dismissState.targetValue) {
-                    SwipeToDismissValue.StartToEnd -> Alignment.CenterStart
-                    SwipeToDismissValue.EndToStart -> Alignment.CenterEnd
-                    SwipeToDismissValue.Settled -> Alignment.Center
-                }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .combinedClickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
+                ?: MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    when (dismissState.targetValue) {
-                        SwipeToDismissValue.StartToEnd -> Icons.Default.PushPin
-                        SwipeToDismissValue.EndToStart -> Icons.Default.Delete
-                        SwipeToDismissValue.Settled -> Icons.Default.PushPin
-                    },
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary
+                Text(
+                    text = note.title.ifEmpty { "Untitled" },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-        },
-        dismissContent = {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .combinedClickable(onClick = onClick),
-                colors = CardDefaults.cardColors(
-                    containerColor = note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
-                        ?: MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = note.title.ifEmpty { "Untitled" },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (note.isPinned) {
-                            Icon(
-                                Icons.Default.PushPin,
-                                contentDescription = "Pinned",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    if (note.content.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = note.content,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = formatDate(note.updatedAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                if (note.isPinned) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = "Pinned",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-        },
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true
-    )
+            if (note.content.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = note.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = formatDate(note.updatedAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

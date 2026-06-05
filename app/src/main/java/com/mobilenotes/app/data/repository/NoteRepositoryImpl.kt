@@ -11,6 +11,7 @@ import com.mobilenotes.app.domain.model.Result
 import com.mobilenotes.app.domain.model.Tag
 import com.mobilenotes.app.domain.repository.NoteRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,7 +53,7 @@ class NoteRepositoryImpl @Inject constructor(
 
     override suspend fun updateNote(note: Note): Result<Note> {
         return try {
-            val oldEntity = noteDao.getNoteById(note.id)
+            val oldEntity = noteDao.getNoteById(note.id).first()
             val oldNote = oldEntity?.note?.toDomain()
 
             val entity = note.toEntity()
