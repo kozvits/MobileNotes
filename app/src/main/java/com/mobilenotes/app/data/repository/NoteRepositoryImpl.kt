@@ -5,6 +5,7 @@ import com.mobilenotes.app.data.local.dao.NoteTagDao
 import com.mobilenotes.app.data.local.dao.NoteVersionDao
 import com.mobilenotes.app.data.local.entity.NoteEntity
 import com.mobilenotes.app.data.local.entity.NoteVersionEntity
+import com.mobilenotes.app.data.local.entity.NoteWithTags
 import com.mobilenotes.app.domain.model.Note
 import com.mobilenotes.app.domain.model.Result
 import com.mobilenotes.app.domain.model.Tag
@@ -22,22 +23,22 @@ class NoteRepositoryImpl @Inject constructor(
 ) : NoteRepository {
 
     override fun getAllNotes(): Flow<List<Note>> =
-        noteDao.getAllNotes().map { list -> list.map { it.toDomain() } }
+        noteDao.getAllNotes().map { list -> list.map { it.note.toDomain() } }
 
     override fun getNoteById(id: String): Flow<Note?> =
-        noteDao.getNoteById(id).map { it?.toDomain() }
+        noteDao.getNoteById(id).map { it?.note?.toDomain() }
 
     override fun getNotesByFolder(folderId: String): Flow<List<Note>> =
-        noteDao.getNotesByFolder(folderId).map { list -> list.map { it.toDomain() } }
+        noteDao.getNotesByFolder(folderId).map { list -> list.map { it.note.toDomain() } }
 
     override fun getStarredNotes(): Flow<List<Note>> =
-        noteDao.getStarredNotes().map { list -> list.map { it.toDomain() } }
+        noteDao.getStarredNotes().map { list -> list.map { it.note.toDomain() } }
 
     override fun getTrashedNotes(): Flow<List<Note>> =
-        noteDao.getTrashedNotes().map { list -> list.map { it.toDomain() } }
+        noteDao.getTrashedNotes().map { list -> list.map { it.note.toDomain() } }
 
     override fun searchNotes(query: String): Flow<List<Note>> =
-        noteDao.searchNotes(query).map { list -> list.map { it.toDomain() } }
+        noteDao.searchNotes(query).map { list -> list.map { it.note.toDomain() } }
 
     override suspend fun createNote(note: Note): Result<Note> {
         return try {
@@ -52,7 +53,7 @@ class NoteRepositoryImpl @Inject constructor(
     override suspend fun updateNote(note: Note): Result<Note> {
         return try {
             val oldEntity = noteDao.getNoteById(note.id)
-            val oldNote = oldEntity?.toDomain()
+            val oldNote = oldEntity?.note?.toDomain()
 
             val entity = note.toEntity()
             noteDao.updateNote(entity)
