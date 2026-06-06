@@ -16,7 +16,7 @@ interface FolderDao {
     fun getAllFolders(): Flow<List<FolderEntity>>
 
     @Query("SELECT * FROM folders WHERE id = :id")
-    suspend fun getFolderById(id: String): FolderEntity?
+    fun getFolderById(id: String): Flow<FolderEntity?>
 
     @Query("SELECT * FROM folders WHERE parentId = :parentId ORDER BY name ASC")
     fun getChildFolders(parentId: String): Flow<List<FolderEntity>>
