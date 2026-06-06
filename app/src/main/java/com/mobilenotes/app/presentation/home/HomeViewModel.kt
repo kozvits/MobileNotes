@@ -161,11 +161,11 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun onCreatePhotoNote() {
+    fun onCreatePhotoNote(imagePath: String) {
         viewModelScope.launch {
             val result = createNote(
                 title = "Photo Note",
-                content = "📸 Photo note",
+                content = "[img:$imagePath]",
                 folderId = _selectedFolderId.value
             )
             if (result is Result.Success) {

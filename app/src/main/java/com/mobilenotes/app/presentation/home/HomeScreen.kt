@@ -3,9 +3,11 @@ package com.mobilenotes.app.presentation.home
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.provider.MediaStore
+import android.net.Uri
 import android.speech.RecognizerIntent
 import android.widget.Toast
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -131,11 +133,15 @@ fun HomeScreen(
     }
 
     // ---- Camera launcher ----
+    var photoFilePath by remember { mutableStateOf<String?>(null) }
+
     val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.onCreatePhotoNote()
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            photoFilePath?.let { path ->
+                viewModel.onCreatePhotoNote(path)
+            }
         }
     }
 
@@ -311,11 +317,18 @@ fun HomeScreen(
                             onClick = {
                                 showFabMenu = false
                                 try {
-                                    val intent = Intent(
-                                        MediaStore.ACTION_IMAGE_CAPTURE
+                                    val photosDir = File(context.filesDir, "photos")
+                                    photosDir.mkdirs()
+                                    val fileName = "photo_${System.currentTimeMillis()}.jpg"
+                                    val photoFile = File(photosDir, fileName)
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        photoFile
                                     )
-                                    cameraLauncher.launch(intent)
-                                } catch (_: ActivityNotFoundException) {
+                                    photoFilePath = "photos/$fileName"
+                                    cameraLauncher.launch(uri)
+                                } catch (_: Exception) {
                                     Toast.makeText(
                                         context,
                                         "Camera not available",
@@ -641,8 +654,10 @@ private fun NoteListItem(
             }
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
+                // If content contains image markers, show photo indicator
+                val hasImages = note.content.contains("[img:")
                 Text(
-                    text = note.content,
+                    text = if (hasImages) "📷 ${note.content.replace(Regex("""\[img:[^\]]+\]"""), "").trim()}" else note.content,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -704,8 +719,9 @@ private fun NoteGridItem(
             )
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
+                val hasImages = note.content.contains("[img:")
                 Text(
-                    text = note.content,
+                    text = if (hasImages) "📷 ${note.content.replace(Regex("""\[img:[^\]]+\]"""), "").trim()}" else note.content,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
