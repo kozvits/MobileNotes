@@ -1,6 +1,8 @@
 package com.mobilenotes.app.di
 
+import com.mobilenotes.app.data.repository.FolderRepositoryImpl
 import com.mobilenotes.app.data.repository.NoteRepositoryImpl
+import com.mobilenotes.app.domain.repository.FolderRepository
 import com.mobilenotes.app.domain.repository.NoteRepository
 import dagger.Binds
 import dagger.Module
@@ -17,4 +19,10 @@ abstract class RepositoryModule {
     abstract fun bindNoteRepository(
         impl: NoteRepositoryImpl
     ): NoteRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFolderRepository(
+        impl: FolderRepositoryImpl
+    ): FolderRepository
 }
