@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.mobilenotes.app.data.local.entity.FolderEntity
+import com.mobilenotes.app.data.local.entity.FolderWithNoteCount
 import kotlinx.coroutines.flow.Flow
 
 @Dao
