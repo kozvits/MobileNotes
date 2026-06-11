@@ -25,10 +25,7 @@ fun NavGraph(navController: NavHostController) {
             HomeScreen(
                 onNavigateToEditor = { noteId -> navController.navigate(Screen.Editor.createRoute(noteId)) },
                 onNavigateToSearch = { navController.navigate(Screen.Search.route) },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                onNavigateToFolders = { navController.navigate(Screen.Folders.route) },
-                onNavigateToTags = { navController.navigate(Screen.Tags.route) },
-                onNavigateToTrash = { navController.navigate(Screen.Trash.route) }
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
 

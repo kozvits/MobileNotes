@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.mobilenotes.app.domain.model.Folder
 import com.mobilenotes.app.domain.model.Note
 import com.mobilenotes.app.domain.model.Result
+import com.mobilenotes.app.domain.model.TagCount
 import com.mobilenotes.app.domain.usecase.CreateFolder
 import com.mobilenotes.app.domain.usecase.CreateNote
 import com.mobilenotes.app.domain.usecase.DeleteFolder
 import com.mobilenotes.app.domain.usecase.DeleteNote
+import com.mobilenotes.app.domain.usecase.DeleteNotePermanently
 import com.mobilenotes.app.domain.usecase.GetAllFolders
 import com.mobilenotes.app.domain.usecase.GetAllNotes
 import com.mobilenotes.app.domain.usecase.RenameFolder
+import com.mobilenotes.app.domain.usecase.RestoreNote
 import com.mobilenotes.app.domain.usecase.TogglePin
 import com.mobilenotes.app.domain.usecase.ToggleStar
 import com.mobilenotes.app.domain.usecase.UpdateNote
@@ -23,14 +26,16 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class HomeSection { ALL_NOTES, FAVORITES, TAGS, TRASH }
+
 data class HomeUiState(
     val notes: List<Note> = emptyList(),
     val folders: List<Pair<Folder, Int>> = emptyList(),
     val selectedFolderId: String? = null,
+    val selectedFolder: Folder? = null,
     val isLoading: Boolean = true,
     val isGridView: Boolean = false,
-    val searchQuery: String = "",
-    val showFavorites: Boolean = false,
+    val currentSection: HomeSection = HomeSection.ALL_NOTES,
     val contextMenuNote: Note? = null,
     val contextMenuFolder: Folder? = null,
     val showCreateFolderDialog: Boolean = false,
@@ -40,7 +45,12 @@ data class HomeUiState(
     val moveNoteTarget: Note? = null,
     val showDeleteFolderConfirm: Boolean = false,
     val deleteFolderTarget: Folder? = null,
-    val showSettingsDialog: Boolean = false
+    val showSettingsDialog: Boolean = false,
+    val showRestoreNoteConfirm: Boolean = false,
+    val restoreNoteTarget: Note? = null,
+    // Tags
+    val tags: List<TagCount> = emptyList(),
+    val selectedTag: String? = null
 )
 
 @HiltViewModel
@@ -49,6 +59,8 @@ class HomeViewModel @Inject constructor(
     private val getAllFolders: GetAllFolders,
     private val createNote: CreateNote,
     private val deleteNote: DeleteNote,
+    private val deleteNotePermanently: DeleteNotePermanently,
+    private val restoreNote: RestoreNote,
     private val togglePin: TogglePin,
     private val toggleStar: ToggleStar,
     private val createFolder: CreateFolder,
@@ -61,7 +73,8 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val _selectedFolderId = MutableStateFlow<String?>(null)
-    private val _showFavorites = MutableStateFlow(false)
+    private val _currentSection = MutableStateFlow(HomeSection.ALL_NOTES)
+    private val _selectedTag = MutableStateFlow<String?>(null)
 
     /** Emits a note ID when UI should navigate to editor for it */
     private val _navigateToEditor = MutableStateFlow<String?>(null)
@@ -73,30 +86,66 @@ class HomeViewModel @Inject constructor(
                 getAllNotes(),
                 getAllFolders(),
                 _selectedFolderId,
-                _showFavorites
-            ) { allNotes, folders, selectedId, showFav ->
-                val byFolder = if (selectedId != null) {
-                    allNotes.filter { it.folderId == selectedId }
-                } else {
-                    allNotes
+                _currentSection,
+                _selectedTag
+            ) { allNotes, folders, selectedId, section, tag ->
+                val filteredNotes = when (section) {
+                    HomeSection.ALL_NOTES -> {
+                        allNotes
+                            .filter { !it.isDeleted }
+                            .let { byFolder ->
+                                if (selectedId != null) byFolder.filter { it.folderId == selectedId }
+                                else byFolder
+                            }
+                            .let { byTag ->
+                                if (tag != null) byTag.filter { note -> note.tags.any { it.name == tag } }
+                                else byTag
+                            }
+                    }
+                    HomeSection.FAVORITES -> {
+                        allNotes
+                            .filter { it.isStarred && !it.isDeleted }
+                            .let { byFolder ->
+                                if (selectedId != null) byFolder.filter { it.folderId == selectedId }
+                                else byFolder
+                            }
+                    }
+                    HomeSection.TAGS -> {
+                        allNotes.filter { !it.isDeleted }
+                    }
+                    HomeSection.TRASH -> {
+                        allNotes.filter { it.isDeleted }
+                    }
                 }
-                val filtered = if (showFav) byFolder.filter { it.isStarred }
-                else byFolder
 
                 val foldersWithCount = folders.map { folder ->
-                    folder to allNotes.count { it.folderId == folder.id }
+                    folder to allNotes.count { it.folderId == folder.id && !it.isDeleted }
                 }
 
+                val selectedFolderObj = if (selectedId != null) folders.find { it.id == selectedId } else null
+
+                val tagCounts = allNotes
+                    .filter { !it.isDeleted }
+                    .flatMap { it.tags }
+                    .groupBy { it.name }
+                    .map { (name, tags) ->
+                        TagCount(name = name, count = tags.size, color = tags.firstOrNull()?.color)
+                    }
+                    .sortedByDescending { it.count }
+
                 HomeUiState(
-                    notes = filtered,
+                    notes = filteredNotes,
                     folders = foldersWithCount,
                     selectedFolderId = selectedId,
+                    selectedFolder = selectedFolderObj,
                     isLoading = false,
                     isGridView = _uiState.value.isGridView,
-                    searchQuery = _uiState.value.searchQuery,
-                    showFavorites = showFav
+                    currentSection = section,
+                    tags = tagCounts,
+                    selectedTag = if (section == HomeSection.TAGS) tag else null
                 )
             }.collect { state ->
+                // Preserve dialog/menu state across updates
                 _uiState.value = state.copy(
                     contextMenuNote = _uiState.value.contextMenuNote,
                     contextMenuFolder = _uiState.value.contextMenuFolder,
@@ -107,7 +156,9 @@ class HomeViewModel @Inject constructor(
                     moveNoteTarget = _uiState.value.moveNoteTarget,
                     showDeleteFolderConfirm = _uiState.value.showDeleteFolderConfirm,
                     deleteFolderTarget = _uiState.value.deleteFolderTarget,
-                    showSettingsDialog = _uiState.value.showSettingsDialog
+                    showSettingsDialog = _uiState.value.showSettingsDialog,
+                    showRestoreNoteConfirm = _uiState.value.showRestoreNoteConfirm,
+                    restoreNoteTarget = _uiState.value.restoreNoteTarget
                 )
             }
         }
@@ -121,20 +172,25 @@ class HomeViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isGridView = !_uiState.value.isGridView)
     }
 
+    fun selectSection(section: HomeSection) {
+        _currentSection.value = section
+        if (section != HomeSection.ALL_NOTES) {
+            _selectedFolderId.value = null
+        }
+        if (section != HomeSection.TAGS) {
+            _selectedTag.value = null
+        }
+    }
+
     fun selectFolder(folderId: String?) {
         _selectedFolderId.value = folderId
+        _currentSection.value = HomeSection.ALL_NOTES
     }
 
-    // ---- Navigation / Drawer ----
+    // ---- Tags ----
 
-    fun showAllNotes() {
-        _selectedFolderId.value = null
-        _showFavorites.value = false
-    }
-
-    fun toggleShowFavorites() {
-        _showFavorites.value = !_showFavorites.value
-        if (_showFavorites.value) _selectedFolderId.value = null
+    fun toggleTagFilter(tagName: String) {
+        _selectedTag.value = if (_selectedTag.value == tagName) null else tagName
     }
 
     // ---- Note creation ----
@@ -179,6 +235,20 @@ class HomeViewModel @Inject constructor(
             deleteNote(noteId)
         }
         dismissContextMenu()
+    }
+
+    fun onDeleteNotePermanently(noteId: String) {
+        viewModelScope.launch {
+            deleteNotePermanently(noteId)
+        }
+        dismissContextMenu()
+    }
+
+    fun onRestoreNote(noteId: String) {
+        viewModelScope.launch {
+            restoreNote(noteId)
+        }
+        dismissAll()
     }
 
     fun onTogglePin(noteId: String) {
@@ -284,6 +354,14 @@ class HomeViewModel @Inject constructor(
         dismissContextMenu()
     }
 
+    fun showRestoreNoteConfirm(note: Note) {
+        _uiState.value = _uiState.value.copy(
+            showRestoreNoteConfirm = true,
+            restoreNoteTarget = note
+        )
+        dismissContextMenu()
+    }
+
     fun showSettingsDialog() {
         _uiState.value = _uiState.value.copy(showSettingsDialog = true)
     }
@@ -297,7 +375,9 @@ class HomeViewModel @Inject constructor(
             moveNoteTarget = null,
             showDeleteFolderConfirm = false,
             deleteFolderTarget = null,
-            showSettingsDialog = false
+            showSettingsDialog = false,
+            showRestoreNoteConfirm = false,
+            restoreNoteTarget = null
         )
     }
 

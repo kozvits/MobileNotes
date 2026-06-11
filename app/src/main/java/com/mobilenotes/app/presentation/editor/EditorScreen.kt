@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListBulleted
@@ -35,7 +36,7 @@ import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mobilenotes.app.presentation.components.DrawingDialog
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,14 +85,13 @@ fun EditorScreen(
     // Full-screen image viewer
     var fullScreenImagePath by remember { mutableStateOf<String?>(null) }
 
-    // Parse image markers from content
-    val imagePaths = remember(uiState.content) {
-        val regex = Regex("""\[img:([^\]]+)\]""")
-        regex.findAll(uiState.content).map { it.groupValues[1] }.toList()
-    }
+    // Drawing dialog
+    var showDrawingDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        // no-op, ViewModel handles loading
+    // Parse image/drawing markers from content
+    val imagePaths = remember(uiState.content) {
+        val regex = Regex("""\[(img|drawing):([^\]]+)\]""")
+        regex.findAll(uiState.content).map { it.groupValues[2] }.toList()
     }
 
     Scaffold(
@@ -137,9 +138,9 @@ fun EditorScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            FormattingToolbar(viewModel)
+            FormattingToolbar(onDrawingClick = { showDrawingDialog = true })
 
-            Divider()
+            HorizontalDivider()
 
             Column(
                 modifier = Modifier
@@ -194,7 +195,7 @@ fun EditorScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // ---- Embedded images ----
+                // ---- Embedded images & drawings ----
                 if (imagePaths.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     imagePaths.forEach { path ->
@@ -206,7 +207,7 @@ fun EditorScreen(
                             if (bitmap != null) {
                                 Image(
                                     bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Photo",
+                                    contentDescription = if (path.startsWith("drawing")) "Drawing" else "Photo",
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 4.dp)
@@ -229,6 +230,18 @@ fun EditorScreen(
         FullScreenImageDialog(
             imagePath = fullScreenImagePath!!,
             onDismiss = { fullScreenImagePath = null }
+        )
+    }
+
+    // ---- Drawing dialog ----
+    if (showDrawingDialog) {
+        DrawingDialog(
+            onDismiss = { showDrawingDialog = false },
+            onSave = { filePath ->
+                val marker = "[drawing:$filePath]"
+                viewModel.onContentChanged(uiState.content + "\n\n$marker")
+                viewModel.scheduleAutoSave()
+            }
         )
     }
 }
@@ -259,7 +272,7 @@ private fun FullScreenImageDialog(
                 if (bitmap != null) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Photo full size",
+                        contentDescription = "Full size",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
@@ -290,7 +303,9 @@ private fun FullScreenImageDialog(
 }
 
 @Composable
-private fun FormattingToolbar(viewModel: EditorViewModel) {
+private fun FormattingToolbar(
+    onDrawingClick: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -308,6 +323,8 @@ private fun FormattingToolbar(viewModel: EditorViewModel) {
         FormatButton(Icons.Default.FormatListBulleted, "List") { /* toggle list */ }
         FormatButton(Icons.Default.FormatQuote, "Quote") { /* toggle quote */ }
         FormatButton(Icons.Default.HorizontalRule, "Divider") { /* insert divider */ }
+        // Handwriting button
+        FormatButton(Icons.Default.Create, "Draw") { onDrawingClick() }
     }
 }
 

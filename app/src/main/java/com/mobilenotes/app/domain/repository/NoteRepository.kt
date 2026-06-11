@@ -11,6 +11,7 @@ interface NoteRepository {
     fun getStarredNotes(): Flow<List<Note>>
     fun getTrashedNotes(): Flow<List<Note>>
     fun searchNotes(query: String): Flow<List<Note>>
+    fun getAllTags(): Flow<List<TagCount>>
     suspend fun createNote(note: Note): Result<Note>
     suspend fun updateNote(note: Note): Result<Note>
     suspend fun deleteNote(id: String): Result<Unit>

@@ -9,6 +9,7 @@ import com.mobilenotes.app.data.local.entity.NoteWithTags
 import com.mobilenotes.app.domain.model.Note
 import com.mobilenotes.app.domain.model.Result
 import com.mobilenotes.app.domain.model.Tag
+import com.mobilenotes.app.domain.model.TagCount
 import com.mobilenotes.app.domain.repository.NoteRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -24,22 +25,38 @@ class NoteRepositoryImpl @Inject constructor(
 ) : NoteRepository {
 
     override fun getAllNotes(): Flow<List<Note>> =
-        noteDao.getAllNotes().map { list -> list.map { it.note.toDomain() } }
+        noteDao.getAllNotes().map { list -> list.map { it.toDomain() } }
 
     override fun getNoteById(id: String): Flow<Note?> =
-        noteDao.getNoteById(id).map { it?.note?.toDomain() }
+        noteDao.getNoteById(id).map { it?.toDomain() }
 
     override fun getNotesByFolder(folderId: String): Flow<List<Note>> =
-        noteDao.getNotesByFolder(folderId).map { list -> list.map { it.note.toDomain() } }
+        noteDao.getNotesByFolder(folderId).map { list -> list.map { it.toDomain() } }
 
     override fun getStarredNotes(): Flow<List<Note>> =
-        noteDao.getStarredNotes().map { list -> list.map { it.note.toDomain() } }
+        noteDao.getStarredNotes().map { list -> list.map { it.toDomain() } }
 
     override fun getTrashedNotes(): Flow<List<Note>> =
-        noteDao.getTrashedNotes().map { list -> list.map { it.note.toDomain() } }
+        noteDao.getTrashedNotes().map { list -> list.map { it.toDomain() } }
 
     override fun searchNotes(query: String): Flow<List<Note>> =
-        noteDao.searchNotes(query).map { list -> list.map { it.note.toDomain() } }
+        noteDao.searchNotes(query).map { list -> list.map { it.toDomain() } }
+
+    override fun getAllTags(): Flow<List<TagCount>> =
+        noteDao.getAllNotes().map { notesWithTags ->
+            notesWithTags
+                .filter { !it.note.isDeleted }
+                .flatMap { it.tags }
+                .groupBy { it.name }
+                .map { (name, tags) ->
+                    TagCount(
+                        name = name,
+                        count = tags.size,
+                        color = tags.firstOrNull()?.color
+                    )
+                }
+                .sortedByDescending { it.count }
+        }
 
     override suspend fun createNote(note: Note): Result<Note> {
         return try {
@@ -54,7 +71,7 @@ class NoteRepositoryImpl @Inject constructor(
     override suspend fun updateNote(note: Note): Result<Note> {
         return try {
             val oldEntity = noteDao.getNoteById(note.id).first()
-            val oldNote = oldEntity?.note?.toDomain()
+            val oldNote = oldEntity?.toDomain()
 
             val entity = note.toEntity()
             noteDao.updateNote(entity)
@@ -133,21 +150,22 @@ class NoteRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun NoteEntity.toDomain(): Note {
+    private fun NoteWithTags.toDomain(): Note {
         return Note(
-            id = id,
-            title = title,
-            content = content,
-            folderId = folderId,
-            colorHex = colorHex,
-            isPinned = isPinned,
-            isStarred = isStarred,
-            isDeleted = isDeleted,
-            isLocked = isLocked,
-            reminderTimestamp = reminderTimestamp,
-            createdAt = createdAt,
-            updatedAt = updatedAt,
-            syncedAt = syncedAt
+            id = note.id,
+            title = note.title,
+            content = note.content,
+            folderId = note.folderId,
+            colorHex = note.colorHex,
+            isPinned = note.isPinned,
+            isStarred = note.isStarred,
+            isDeleted = note.isDeleted,
+            isLocked = note.isLocked,
+            reminderTimestamp = note.reminderTimestamp,
+            createdAt = note.createdAt,
+            updatedAt = note.updatedAt,
+            syncedAt = note.syncedAt,
+            tags = tags.map { Tag(id = it.id, name = it.name, color = it.color) }
         )
     }
 

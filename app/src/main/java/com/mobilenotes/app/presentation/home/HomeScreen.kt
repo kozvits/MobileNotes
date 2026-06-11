@@ -16,6 +16,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,32 +29,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -61,7 +66,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -100,13 +105,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     onNavigateToEditor: (String?) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToFolders: () -> Unit = {},
     onNavigateToTags: () -> Unit = {},
     onNavigateToTrash: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -155,66 +159,187 @@ fun HomeScreen(
     }
 
     // ================================================================
-    // DRAWER
+    // DRAWER — левая панель с меню и папками
     // ================================================================
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Spacer(Modifier.height(16.dp))
 
-                // App header in drawer
+                // App header
                 Text(
                     text = "MobileNotes",
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
                 )
 
-                Divider(modifier = Modifier.padding(horizontal = 28.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
                 Spacer(Modifier.height(8.dp))
 
-                // All Notes
+                // ===== NAVIGATION SECTION =====
+                Text(
+                    text = "NAVIGATION",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
+                )
+
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Home, contentDescription = null) },
                     label = { Text("All Notes") },
-                    selected = !uiState.showFavorites && uiState.selectedFolderId == null,
+                    selected = uiState.currentSection == HomeSection.ALL_NOTES,
                     onClick = {
-                        viewModel.showAllNotes()
+                        viewModel.selectSection(HomeSection.ALL_NOTES)
                         scope.launch { drawerState.close() }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
-                // Favorites
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Star, contentDescription = null) },
                     label = { Text("Favorites") },
-                    selected = uiState.showFavorites,
+                    selected = uiState.currentSection == HomeSection.FAVORITES,
                     onClick = {
-                        viewModel.toggleShowFavorites()
+                        viewModel.selectSection(HomeSection.FAVORITES)
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Label, contentDescription = null) },
+                    label = { Text("Tags") },
+                    selected = uiState.currentSection == HomeSection.TAGS,
+                    onClick = {
+                        viewModel.selectSection(HomeSection.TAGS)
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+                    label = { Text("Trash") },
+                    selected = uiState.currentSection == HomeSection.TRASH,
+                    onClick = {
+                        viewModel.selectSection(HomeSection.TRASH)
                         scope.launch { drawerState.close() }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
                 Spacer(Modifier.height(8.dp))
-                Divider(modifier = Modifier.padding(horizontal = 28.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
                 Spacer(Modifier.height(8.dp))
 
-                // Settings
+                // ===== FOLDERS SECTION =====
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "FOLDERS",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    IconButton(
+                        onClick = { viewModel.showCreateFolderDialog() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "New folder",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // Folders list
+                if (uiState.folders.isEmpty()) {
+                    Text(
+                        text = "No folders yet",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
+                    )
+                } else {
+                    uiState.folders.forEach { (folder, count) ->
+                        NavigationDrawerItem(
+                            icon = {
+                                Icon(
+                                    Icons.Default.Folder,
+                                    contentDescription = null,
+                                    tint = if (uiState.selectedFolderId == folder.id)
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            label = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = folder.name,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (count > 0) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ) { Text("$count") }
+                                    }
+                                }
+                            },
+                            selected = uiState.selectedFolderId == folder.id,
+                            onClick = {
+                                viewModel.selectFolder(folder.id)
+                                scope.launch { drawerState.close() }
+                            },
+                            badge = {
+                                // Folder context menu button
+                                IconButton(
+                                    onClick = { viewModel.showFolderContextMenu(folder) },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.DriveFileRenameOutline,
+                                        contentDescription = "Folder options",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // ===== SETTINGS =====
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                     label = { Text("Settings") },
                     selected = false,
                     onClick = {
                         scope.launch { drawerState.close() }
-                        viewModel.showSettingsDialog()
+                        onNavigateToSettings()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
-                // About
                 NavigationDrawerItem(
                     icon = { Icon(Icons.Default.Info, contentDescription = null) },
                     label = { Text("About") },
@@ -236,12 +361,11 @@ fun HomeScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            when {
-                                uiState.showFavorites -> "Favorites"
-                                uiState.selectedFolderId != null ->
-                                    uiState.folders.find { it.first.id == uiState.selectedFolderId }?.first?.name
-                                        ?: "MobileNotes"
-                                else -> "MobileNotes"
+                            when (uiState.currentSection) {
+                                HomeSection.FAVORITES -> "Favorites"
+                                HomeSection.TAGS -> "Tags"
+                                HomeSection.TRASH -> "Trash"
+                                else -> uiState.selectedFolder?.name ?: "MobileNotes"
                             }
                         )
                     },
@@ -268,83 +392,85 @@ fun HomeScreen(
                 )
             },
             floatingActionButton = {
-                Column(horizontalAlignment = Alignment.End) {
-                    if (showFabMenu) {
-                        // Text note
-                        FilledTonalButton(
-                            onClick = {
-                                showFabMenu = false
-                                viewModel.onCreateNote()
-                            },
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Icon(Icons.Default.StickyNote2, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Text")
-                        }
-                        // Voice note
-                        FilledTonalButton(
-                            onClick = {
-                                showFabMenu = false
-                                try {
-                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                        putExtra(
-                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                                        )
-                                        putExtra(
-                                            RecognizerIntent.EXTRA_PROMPT,
-                                            "Speak your note..."
-                                        )
+                if (uiState.currentSection != HomeSection.TRASH) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        if (showFabMenu) {
+                            // Text note
+                            FilledTonalButton(
+                                onClick = {
+                                    showFabMenu = false
+                                    viewModel.onCreateNote()
+                                },
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Icon(Icons.Default.StickyNote2, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Text")
+                            }
+                            // Voice note
+                            FilledTonalButton(
+                                onClick = {
+                                    showFabMenu = false
+                                    try {
+                                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                            putExtra(
+                                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                                            )
+                                            putExtra(
+                                                RecognizerIntent.EXTRA_PROMPT,
+                                                "Speak your note..."
+                                            )
+                                        }
+                                        speechLauncher.launch(intent)
+                                    } catch (_: ActivityNotFoundException) {
+                                        Toast.makeText(
+                                            context,
+                                            "Speech recognition not available",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
-                                    speechLauncher.launch(intent)
-                                } catch (_: ActivityNotFoundException) {
-                                    Toast.makeText(
-                                        context,
-                                        "Speech recognition not available",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Icon(Icons.Default.Mic, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Voice")
+                                },
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Voice")
+                            }
+                            // Photo note
+                            FilledTonalButton(
+                                onClick = {
+                                    showFabMenu = false
+                                    try {
+                                        val photosDir = File(context.filesDir, "photos")
+                                        photosDir.mkdirs()
+                                        val fileName = "photo_${System.currentTimeMillis()}.jpg"
+                                        val photoFile = File(photosDir, fileName)
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            photoFile
+                                        )
+                                        photoFilePath = "photos/$fileName"
+                                        cameraLauncher.launch(uri)
+                                    } catch (_: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "Camera not available",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Photo")
+                            }
                         }
-                        // Photo note
-                        FilledTonalButton(
-                            onClick = {
-                                showFabMenu = false
-                                try {
-                                    val photosDir = File(context.filesDir, "photos")
-                                    photosDir.mkdirs()
-                                    val fileName = "photo_${System.currentTimeMillis()}.jpg"
-                                    val photoFile = File(photosDir, fileName)
-                                    val uri = FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        photoFile
-                                    )
-                                    photoFilePath = "photos/$fileName"
-                                    cameraLauncher.launch(uri)
-                                } catch (_: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        "Camera not available",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Photo")
+                        FloatingActionButton(onClick = { showFabMenu = !showFabMenu }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add note")
                         }
-                    }
-                    FloatingActionButton(onClick = { showFabMenu = !showFabMenu }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add note")
                     }
                 }
             }
@@ -354,22 +480,11 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                // ---- Folder bar (hidden in Favorites mode) ----
-                if (!uiState.showFavorites) {
-                    FolderBar(
-                        folders = uiState.folders,
-                        selectedFolderId = uiState.selectedFolderId,
-                        onSelectFolder = { viewModel.selectFolder(it) },
-                        onCreateFolder = { viewModel.showCreateFolderDialog() },
-                        onFolderLongClick = { viewModel.showFolderContextMenu(it) }
+                // ---- Tag chips for Tags section ----
+                if (uiState.currentSection == HomeSection.TAGS) {
+                    TagsSection(
+                        viewModel = viewModel
                     )
-                }
-
-                // ---- Notes content ----
-                if (uiState.isLoading) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Loading...")
-                    }
                 } else if (uiState.notes.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -382,7 +497,8 @@ fun HomeScreen(
                             Spacer(Modifier.height(16.dp))
                             Text(
                                 when {
-                                    uiState.showFavorites -> "No favorite notes"
+                                    uiState.currentSection == HomeSection.FAVORITES -> "No favorite notes"
+                                    uiState.currentSection == HomeSection.TRASH -> "Trash is empty"
                                     uiState.selectedFolderId != null -> "No notes in this folder"
                                     else -> "No notes yet"
                                 },
@@ -392,7 +508,8 @@ fun HomeScreen(
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 when {
-                                    uiState.showFavorites -> "Star a note to see it here"
+                                    uiState.currentSection == HomeSection.FAVORITES -> "Star a note to see it here"
+                                    uiState.currentSection == HomeSection.TRASH -> "Deleted notes appear here"
                                     uiState.selectedFolderId != null -> "Tap + to add a note here"
                                     else -> "Tap + to create your first note"
                                 },
@@ -412,7 +529,14 @@ fun HomeScreen(
                         items(uiState.notes, key = { it.id }) { note ->
                             NoteGridItem(
                                 note = note,
-                                onClick = { onNavigateToEditor(note.id) },
+                                section = uiState.currentSection,
+                                onClick = {
+                                    if (note.isDeleted) {
+                                        viewModel.showRestoreNoteConfirm(note)
+                                    } else {
+                                        onNavigateToEditor(note.id)
+                                    }
+                                },
                                 onLongClick = { viewModel.showNoteContextMenu(note) }
                             )
                         }
@@ -425,7 +549,14 @@ fun HomeScreen(
                         items(uiState.notes, key = { it.id }) { note ->
                             NoteListItem(
                                 note = note,
-                                onClick = { onNavigateToEditor(note.id) },
+                                section = uiState.currentSection,
+                                onClick = {
+                                    if (note.isDeleted) {
+                                        viewModel.showRestoreNoteConfirm(note)
+                                    } else {
+                                        onNavigateToEditor(note.id)
+                                    }
+                                },
                                 onLongClick = { viewModel.showNoteContextMenu(note) }
                             )
                         }
@@ -438,11 +569,14 @@ fun HomeScreen(
     // ---- Note context menu ----
     NoteContextMenu(
         note = uiState.contextMenuNote,
+        isTrash = uiState.currentSection == HomeSection.TRASH,
         onDismiss = { viewModel.dismissContextMenu() },
         onTogglePin = { viewModel.onTogglePin(it.id) },
         onToggleStar = { viewModel.onToggleStar(it.id) },
         onMoveToFolder = { viewModel.showMoveNoteDialog(it) },
-        onDelete = { viewModel.onDeleteNote(it.id) }
+        onDelete = { viewModel.onDeleteNote(it.id) },
+        onRestore = { viewModel.onRestoreNote(it.id) },
+        onDeletePermanently = { viewModel.onDeleteNotePermanently(it.id) }
     )
 
     // ---- Folder context menu ----
@@ -490,6 +624,13 @@ fun HomeScreen(
         )
     }
 
+    if (uiState.showRestoreNoteConfirm && uiState.restoreNoteTarget != null) {
+        RestoreNoteConfirmDialog(
+            onDismiss = { viewModel.dismissDialog() },
+            onConfirm = { viewModel.onRestoreNote(uiState.restoreNoteTarget!!.id) }
+        )
+    }
+
     // ---- Settings dialog ----
     if (uiState.showSettingsDialog) {
         SettingsDialog(
@@ -499,106 +640,59 @@ fun HomeScreen(
 }
 
 // ================================================================
-// FOLDER BAR
+// TAGS SECTION
 // ================================================================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FolderBar(
-    folders: List<Pair<Folder, Int>>,
-    selectedFolderId: String?,
-    onSelectFolder: (String?) -> Unit,
-    onCreateFolder: () -> Unit,
-    onFolderLongClick: (Folder) -> Unit
-) {
-    Surface(
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-    ) {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            item {
-                FolderChip(
-                    label = "All",
-                    icon = if (selectedFolderId == null) Icons.Default.FolderOpen else Icons.Default.Folder,
-                    isSelected = selectedFolderId == null,
-                    onClick = { onSelectFolder(null) }
-                )
-            }
-            items(folders, key = { it.first.id }) { (folder, noteCount) ->
-                FolderChip(
-                    label = "${folder.iconEmoji ?: "📁"} ${folder.name}",
-                    subLabel = "$noteCount",
-                    isSelected = folder.id == selectedFolderId,
-                    onClick = { onSelectFolder(folder.id) },
-                    onLongClick = { onFolderLongClick(folder) }
-                )
-            }
-            item {
-                IconButton(
-                    onClick = onCreateFolder,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Default.CreateNewFolder,
-                        contentDescription = "Create folder",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+private fun TagsSection(viewModel: HomeViewModel) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (uiState.tags.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                uiState.tags.forEach { tag ->
+                    Surface(
+                        modifier = Modifier.clickable {
+                            viewModel.toggleTagFilter(tag.name)
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (uiState.selectedTag == tag.name)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = 1.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${if (tag.color != null) "●" else "#"} ${tag.name}",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${tag.count}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FolderChip(
-    label: String,
-    icon: ImageVector? = null,
-    subLabel: String? = null,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null
-) {
-    Surface(
-        modifier = Modifier.combinedClickable(
-            onClick = onClick,
-            onLongClick = onLongClick
-        ),
-        shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isSelected) 2.dp else 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                else MaterialTheme.colorScheme.onSurface
-            )
-            if (subLabel != null) {
-                Spacer(Modifier.width(4.dp))
+        if (uiState.tags.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    text = subLabel,
-                    style = MaterialTheme.typography.labelSmall,
+                    "No tags yet",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline
                 )
             }
@@ -614,6 +708,7 @@ private fun FolderChip(
 @Composable
 private fun NoteListItem(
     note: Note,
+    section: HomeSection,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -626,7 +721,8 @@ private fun NoteListItem(
                 onLongClick = onLongClick
             ),
         colors = CardDefaults.cardColors(
-            containerColor = note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
+            containerColor = if (note.isDeleted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            else note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
                 ?: MaterialTheme.colorScheme.surface
         )
     ) {
@@ -641,35 +737,61 @@ private fun NoteListItem(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    color = if (note.isDeleted) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface
                 )
-                if (note.isPinned) {
-                    Icon(
-                        Icons.Default.PushPin,
-                        contentDescription = "Pinned",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Row {
+                    if (note.isDeleted) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Deleted",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    if (note.isPinned) {
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = "Pinned",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                // If content contains image markers, show photo indicator
-                val hasImages = note.content.contains("[img:")
+                val hasImages = note.content.contains("[img:") || note.content.contains("[drawing:")
                 Text(
-                    text = if (hasImages) "📷 ${note.content.replace(Regex("""\[img:[^\]]+\]"""), "").trim()}" else note.content,
+                    text = when {
+                        hasImages -> "📷 ${note.content.replace(Regex("""\[(img|drawing):[^\]]+\]"""), "").trim()}"
+                        else -> note.content
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (note.isDeleted) MaterialTheme.colorScheme.outline
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(Modifier.height(4.dp))
-            Text(
-                text = formatDate(note.updatedAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
+            Row {
+                Text(
+                    text = formatDate(note.updatedAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                if (note.tags.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = note.tags.joinToString(" · ") { "${it.emoji ?: "#"}${it.name}" },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
     }
 }
@@ -682,6 +804,7 @@ private fun NoteListItem(
 @Composable
 private fun NoteGridItem(
     note: Note,
+    section: HomeSection,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -693,7 +816,8 @@ private fun NoteGridItem(
                 onLongClick = onLongClick
             ),
         colors = CardDefaults.cardColors(
-            containerColor = note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
+            containerColor = if (note.isDeleted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            else note.colorHex?.let { Color(android.graphics.Color.parseColor(it)) }
                 ?: MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
@@ -715,13 +839,18 @@ private fun NoteGridItem(
                 text = note.title.ifEmpty { "Untitled" },
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = if (note.isDeleted) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurface
             )
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                val hasImages = note.content.contains("[img:")
+                val hasImages = note.content.contains("[img:") || note.content.contains("[drawing:")
                 Text(
-                    text = if (hasImages) "📷 ${note.content.replace(Regex("""\[img:[^\]]+\]"""), "").trim()}" else note.content,
+                    text = when {
+                        hasImages -> "📷 ${note.content.replace(Regex("""\[(img|drawing):[^\]]+\]"""), "").trim()}"
+                        else -> note.content
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -745,48 +874,70 @@ private fun NoteGridItem(
 @Composable
 private fun NoteContextMenu(
     note: Note?,
+    isTrash: Boolean = false,
     onDismiss: () -> Unit,
     onTogglePin: (Note) -> Unit,
     onToggleStar: (Note) -> Unit,
     onMoveToFolder: (Note) -> Unit,
-    onDelete: (Note) -> Unit
+    onDelete: (Note) -> Unit,
+    onRestore: (Note) -> Unit = {},
+    onDeletePermanently: (Note) -> Unit = {}
 ) {
     if (note != null) {
         DropdownMenu(
             expanded = true,
             onDismissRequest = onDismiss
         ) {
-            DropdownMenuItem(
-                text = { Text(if (note.isPinned) "Unpin" else "Pin") },
-                onClick = { onTogglePin(note) },
-                leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) }
-            )
-            DropdownMenuItem(
-                text = { Text(if (note.isStarred) "Remove from favorites" else "Add to favorites") },
-                onClick = { onToggleStar(note) },
-                leadingIcon = { Icon(Icons.Default.Star, contentDescription = null) }
-            )
-            DropdownMenuItem(
-                text = { Text("Move to folder") },
-                onClick = { onMoveToFolder(note) },
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) }
-            )
-            DropdownMenuItem(
-                text = { Text("Share") },
-                onClick = { onDismiss() },
-                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) }
-            )
-            DropdownMenuItem(
-                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                onClick = { onDelete(note) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            )
+            if (isTrash || note.isDeleted) {
+                DropdownMenuItem(
+                    text = { Text("Restore") },
+                    onClick = { onRestore(note) },
+                    leadingIcon = { Icon(Icons.Default.StickyNote2, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete permanently", color = MaterialTheme.colorScheme.error) },
+                    onClick = { onDeletePermanently(note) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                )
+            } else {
+                DropdownMenuItem(
+                    text = { Text(if (note.isPinned) "Unpin" else "Pin") },
+                    onClick = { onTogglePin(note) },
+                    leadingIcon = { Icon(Icons.Default.PushPin, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text(if (note.isStarred) "Remove from favorites" else "Add to favorites") },
+                    onClick = { onToggleStar(note) },
+                    leadingIcon = { Icon(Icons.Default.Star, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Move to folder") },
+                    onClick = { onMoveToFolder(note) },
+                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    onClick = { onDismiss() },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    onClick = { onDelete(note) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                )
+            }
         }
     }
 }
@@ -1006,13 +1157,39 @@ private fun DeleteFolderConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete folder?") },
+        title = { Text("Delete Folder") },
         text = {
-            Text("The folder \"$folderName\" will be deleted. Notes inside will remain but will no longer be assigned to any folder.")
+            Text("Delete \"$folderName\"? Notes in this folder will not be deleted.")
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// ================================================================
+// RESTORE NOTE CONFIRMATION DIALOG
+// ================================================================
+
+@Composable
+private fun RestoreNoteConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore Note") },
+        text = { Text("Restore this note to your active notes?") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Restore")
             }
         },
         dismissButton = {
@@ -1035,15 +1212,7 @@ private fun SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("MobileNotes") },
         text = {
-            Column {
-                Text("Version 1.0")
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "A simple note-taking app with folders, tags, and markdown support.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text("Version 1.0\n\nA simple, powerful note-taking app with folders, tags, voice, photo, and handwriting support.")
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
@@ -1054,10 +1223,10 @@ private fun SettingsDialog(
 }
 
 // ================================================================
-// DATE FORMATTER
+// UTILITY
 // ================================================================
 
 private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
 }

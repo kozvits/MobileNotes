@@ -8,7 +8,4 @@ sealed class Screen(val route: String) {
     }
     data object Search : Screen("search")
     data object Settings : Screen("settings")
-    data object Folders : Screen("folders")
-    data object Tags : Screen("tags")
-    data object Trash : Screen("trash")
 }
