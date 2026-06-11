@@ -10,6 +10,11 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -28,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -60,7 +64,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,7 +74,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -81,14 +83,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,7 +100,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mobilenotes.app.domain.model.Folder
 import com.mobilenotes.app.domain.model.Note
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -111,15 +110,12 @@ fun HomeScreen(
     onNavigateToEditor: (String?) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToTags: () -> Unit = {},
-    onNavigateToTrash: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    var showFolderPanel by remember { mutableStateOf(true) }
     var showFabMenu by remember { mutableStateOf(false) }
 
     // ---- Voice recognition launcher ----
@@ -159,12 +155,17 @@ fun HomeScreen(
     }
 
     // ================================================================
-    // DRAWER — левая панель с меню и папками
+    // ROOT LAYOUT — Row с анимированной левой панелью папок
     // ================================================================
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
+    Row(modifier = Modifier.fillMaxSize()) {
+
+        // ---- Left panel: folders + navigation ----
+        AnimatedVisibility(
+            visible = showFolderPanel,
+            enter = slideInHorizontally() + expandHorizontally(expandFrom = Alignment.Start),
+            exit = slideOutHorizontally() + shrinkHorizontally(shrinkTowards = Alignment.Start)
+        ) {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Spacer(Modifier.height(16.dp))
 
@@ -192,7 +193,7 @@ fun HomeScreen(
                     selected = uiState.currentSection == HomeSection.ALL_NOTES,
                     onClick = {
                         viewModel.selectSection(HomeSection.ALL_NOTES)
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -203,7 +204,7 @@ fun HomeScreen(
                     selected = uiState.currentSection == HomeSection.FAVORITES,
                     onClick = {
                         viewModel.selectSection(HomeSection.FAVORITES)
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -214,7 +215,7 @@ fun HomeScreen(
                     selected = uiState.currentSection == HomeSection.TAGS,
                     onClick = {
                         viewModel.selectSection(HomeSection.TAGS)
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -225,7 +226,7 @@ fun HomeScreen(
                     selected = uiState.currentSection == HomeSection.TRASH,
                     onClick = {
                         viewModel.selectSection(HomeSection.TRASH)
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -269,58 +270,62 @@ fun HomeScreen(
                         modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
                     )
                 } else {
-                    uiState.folders.forEach { (folder, count) ->
-                        NavigationDrawerItem(
-                            icon = {
-                                Icon(
-                                    Icons.Default.Folder,
-                                    contentDescription = null,
-                                    tint = if (uiState.selectedFolderId == folder.id)
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            label = {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = folder.name,
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (count > 0) {
-                                        Badge(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ) { Text("$count") }
-                                    }
-                                }
-                            },
-                            selected = uiState.selectedFolderId == folder.id,
-                            onClick = {
-                                viewModel.selectFolder(folder.id)
-                                scope.launch { drawerState.close() }
-                            },
-                            badge = {
-                                // Folder context menu button
-                                IconButton(
-                                    onClick = { viewModel.showFolderContextMenu(folder) },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 4.dp)
+                    ) {
+                        items(uiState.folders, key = { it.first.id }) { (folder, count) ->
+                            NavigationDrawerItem(
+                                icon = {
                                     Icon(
-                                        Icons.Default.DriveFileRenameOutline,
-                                        contentDescription = "Folder options",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.outline
+                                        Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = if (uiState.selectedFolderId == folder.id)
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                            },
-                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                        )
+                                },
+                                label = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = folder.name,
+                                            modifier = Modifier.weight(1f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (count > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ) { Text("$count") }
+                                        }
+                                    }
+                                },
+                                selected = uiState.selectedFolderId == folder.id,
+                                onClick = {
+                                    viewModel.selectFolder(folder.id)
+                                    showFolderPanel = false
+                                },
+                                badge = {
+                                    IconButton(
+                                        onClick = { viewModel.showFolderContextMenu(folder) },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.DriveFileRenameOutline,
+                                            contentDescription = "Folder options",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                        }
                     }
                 }
 
@@ -334,7 +339,7 @@ fun HomeScreen(
                     label = { Text("Settings") },
                     selected = false,
                     onClick = {
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                         onNavigateToSettings()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
@@ -345,18 +350,19 @@ fun HomeScreen(
                     label = { Text("About") },
                     selected = false,
                     onClick = {
-                        scope.launch { drawerState.close() }
+                        showFolderPanel = false
                         viewModel.showSettingsDialog()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
             }
         }
-    ) {
+
         // ================================================================
-        // MAIN CONTENT
+        // MAIN CONTENT — растягивается на оставшуюся ширину
         // ================================================================
         Scaffold(
+            modifier = Modifier.weight(1f),
             topBar = {
                 TopAppBar(
                     title = {
@@ -370,8 +376,12 @@ fun HomeScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        IconButton(onClick = { showFolderPanel = !showFolderPanel }) {
+                            Icon(
+                                if (showFolderPanel) Icons.Default.FolderOpen
+                                else Icons.Default.Folder,
+                                contentDescription = if (showFolderPanel) "Hide folders" else "Show folders"
+                            )
                         }
                     },
                     actions = {
