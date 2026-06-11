@@ -7,6 +7,6 @@ class DeleteNotePermanently @Inject constructor(
     private val noteRepository: NoteRepository
 ) {
     suspend operator fun invoke(noteId: String) {
-        noteRepository.deleteNotePermanently(noteId)
+        noteRepository.permanentlyDeleteNote(noteId)
     }
 }

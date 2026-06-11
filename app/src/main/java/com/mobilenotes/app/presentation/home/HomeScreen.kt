@@ -69,7 +69,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -176,7 +176,7 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
+                Divider(modifier = Modifier.padding(horizontal = 28.dp))
                 Spacer(Modifier.height(8.dp))
 
                 // ===== NAVIGATION SECTION =====
@@ -232,7 +232,7 @@ fun HomeScreen(
                 )
 
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
+                Divider(modifier = Modifier.padding(horizontal = 28.dp))
                 Spacer(Modifier.height(8.dp))
 
                 // ===== FOLDERS SECTION =====
@@ -330,7 +330,7 @@ fun HomeScreen(
                 }
 
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))
+                Divider(modifier = Modifier.padding(horizontal = 28.dp))
                 Spacer(Modifier.height(8.dp))
 
                 // ===== SETTINGS =====

@@ -2,6 +2,7 @@ package com.mobilenotes.app.domain.repository
 
 import com.mobilenotes.app.domain.model.Note
 import com.mobilenotes.app.domain.model.Result
+import com.mobilenotes.app.domain.model.TagCount
 import kotlinx.coroutines.flow.Flow
 
 interface NoteRepository {

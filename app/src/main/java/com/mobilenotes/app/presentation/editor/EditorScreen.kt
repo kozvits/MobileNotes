@@ -35,8 +35,8 @@ import androidx.compose.material.icons.filled.HorizontalRule
 import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -140,7 +140,7 @@ fun EditorScreen(
         ) {
             FormattingToolbar(onDrawingClick = { showDrawingDialog = true })
 
-            HorizontalDivider()
+            Divider()
 
             Column(
                 modifier = Modifier

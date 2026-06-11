@@ -82,14 +82,6 @@ class EditorViewModel @Inject constructor(
         }
     }
 
-    private fun scheduleAutoSave() {
-        autoSaveJob?.cancel()
-        autoSaveJob = viewModelScope.launch {
-            delay(3000)
-            save()
-        }
-    }
-
     fun save() {
         viewModelScope.launch {
             val state = _uiState.value
