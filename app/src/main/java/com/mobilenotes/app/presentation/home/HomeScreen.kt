@@ -40,6 +40,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -108,6 +109,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     onNavigateToEditor: (String?) -> Unit = {},
+    onNavigateToHandwriting: (String?) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -417,6 +419,18 @@ fun HomeScreen(
                                 Spacer(Modifier.width(8.dp))
                                 Text("Text")
                             }
+                            // Handwrite note
+                            FilledTonalButton(
+                                onClick = {
+                                    showFabMenu = false
+                                    onNavigateToHandwriting(null)
+                                },
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Create, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Handwrite")
+                            }
                             // Voice note
                             FilledTonalButton(
                                 onClick = {
@@ -543,6 +557,8 @@ fun HomeScreen(
                                 onClick = {
                                     if (note.isDeleted) {
                                         viewModel.showRestoreNoteConfirm(note)
+                                    } else if (note.content.startsWith("[handwriting/v2]")) {
+                                        onNavigateToHandwriting(note.id)
                                     } else {
                                         onNavigateToEditor(note.id)
                                     }
@@ -563,6 +579,8 @@ fun HomeScreen(
                                 onClick = {
                                     if (note.isDeleted) {
                                         viewModel.showRestoreNoteConfirm(note)
+                                    } else if (note.content.startsWith("[handwriting/v2]")) {
+                                        onNavigateToHandwriting(note.id)
                                     } else {
                                         onNavigateToEditor(note.id)
                                     }
@@ -773,9 +791,11 @@ private fun NoteListItem(
             }
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
+                val isHandwriting = note.content.startsWith("[handwriting/v2]")
                 val hasImages = note.content.contains("[img:") || note.content.contains("[drawing:")
                 Text(
                     text = when {
+                        isHandwriting -> "✏️ Handwriting note"
                         hasImages -> "📷 ${note.content.replace(Regex("""\[(img|drawing):[^\]]+\]"""), "").trim()}"
                         else -> note.content
                     },
@@ -856,8 +876,10 @@ private fun NoteGridItem(
             if (note.content.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 val hasImages = note.content.contains("[img:") || note.content.contains("[drawing:")
+                val isHandwriting = note.content.startsWith("[handwriting/v2]")
                 Text(
                     text = when {
+                        isHandwriting -> "✏️ Handwriting note"
                         hasImages -> "📷 ${note.content.replace(Regex("""\[(img|drawing):[^\]]+\]"""), "").trim()}"
                         else -> note.content
                     },
