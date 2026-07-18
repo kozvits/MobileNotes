@@ -1,5 +1,7 @@
 package com.mobilenotes.app.presentation.drawing
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,6 +26,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class Layer(
+    val name: String,
+    val visible: Boolean = true,
+    val locked: Boolean = false
+)
+
 data class HandwritingUiState(
     val noteId: String? = null,
     val title: String = "",
@@ -32,6 +40,14 @@ data class HandwritingUiState(
     val currentColor: androidx.compose.ui.graphics.Color = DrawingColorsStatic[0],
     val currentStrokeWidth: Float = 6f,
     val drawingMode: DrawingMode = DrawingMode.PEN,
+    val selectedIndices: Set<Int> = emptySet(),
+    val selectionRect: Rect? = null,
+    val layers: List<Layer> = listOf(
+        Layer("Layer 1", visible = true),
+        Layer("Layer 2", visible = true),
+        Layer("Layer 3", visible = false)
+    ),
+    val activeLayerIndex: Int = 0,
     val isNew: Boolean = true,
     val isSaving: Boolean = false,
     val lastSavedAt: Long? = null
@@ -96,10 +112,10 @@ class HandwritingViewModel @Inject constructor(
                             strokes = strokes,
                             paperType = paper,
                             isNew = false,
-                            lastSavedAt = note.updatedAt
+                            lastSavedAt = note.updatedAt,
+                            activeLayerIndex = 0
                         )
                     } else {
-                        // Fallback: treat as empty handwriting note
                         _uiState.value = _uiState.value.copy(
                             noteId = note.id,
                             title = note.title,
@@ -113,6 +129,14 @@ class HandwritingViewModel @Inject constructor(
         }
     }
 
+    /** Visible strokes only (filtered by layer visibility). */
+    val visibleStrokes: List<StrokeData>
+        get() {
+            val state = _uiState.value
+            val visibleLayers = state.layers.indices.filter { state.layers[it].visible }.toSet()
+            return state.strokes.filter { it.layerIndex in visibleLayers }
+        }
+
     fun onTitleChanged(title: String) {
         _uiState.value = _uiState.value.copy(title = title)
         scheduleAutoSave()
@@ -124,6 +148,7 @@ class HandwritingViewModel @Inject constructor(
             currentColor = color,
             drawingMode = if (isHighlight) DrawingMode.HIGHLIGHTER else DrawingMode.PEN
         )
+        clearSelection()
     }
 
     fun onStrokeWidthChanged(width: Float) {
@@ -135,10 +160,12 @@ class HandwritingViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             drawingMode = if (current == DrawingMode.ERASER) DrawingMode.PEN else DrawingMode.ERASER
         )
+        clearSelection()
     }
 
     fun setDrawingMode(mode: DrawingMode) {
         _uiState.value = _uiState.value.copy(drawingMode = mode)
+        if (mode != DrawingMode.SELECT) clearSelection()
     }
 
     fun onPaperTypeChanged(paper: PaperType) {
@@ -147,13 +174,15 @@ class HandwritingViewModel @Inject constructor(
     }
 
     fun addStroke(stroke: StrokeData) {
-        val mode = _uiState.value.drawingMode
+        val state = _uiState.value
+        val mode = state.drawingMode
         val enhanced = stroke.copy(
             isHighlighter = mode == DrawingMode.HIGHLIGHTER,
-            isEraser = mode == DrawingMode.ERASER
+            isEraser = mode == DrawingMode.ERASER,
+            layerIndex = state.activeLayerIndex
         )
-        _uiState.value = _uiState.value.copy(
-            strokes = _uiState.value.strokes + enhanced
+        _uiState.value = state.copy(
+            strokes = state.strokes + enhanced
         )
         scheduleAutoSave()
     }
@@ -169,7 +198,86 @@ class HandwritingViewModel @Inject constructor(
 
     fun clearAll() {
         _uiState.value = _uiState.value.copy(strokes = emptyList())
+        clearSelection()
     }
+
+    // ── Selection ──
+
+    private fun hitTestStrokes(rect: Rect): Set<Int> {
+        val selected = mutableSetOf<Int>()
+        _uiState.value.strokes.forEachIndexed { index, stroke ->
+            if (stroke.points.isEmpty()) return@forEachIndexed
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = Float.MIN_VALUE
+            var maxY = Float.MIN_VALUE
+            stroke.points.forEach { pt ->
+                if (pt.x < minX) minX = pt.x
+                if (pt.y < minY) minY = pt.y
+                if (pt.x > maxX) maxX = pt.x
+                if (pt.y > maxY) maxY = pt.y
+            }
+            val strokeRect = Rect(minX, minY, maxX, maxY)
+            if (rect.overlaps(strokeRect)) {
+                selected.add(index)
+            }
+        }
+        return selected
+    }
+
+    fun onSelectionUpdate(rect: Rect) {
+        _uiState.value = _uiState.value.copy(
+            selectionRect = rect,
+            selectedIndices = hitTestStrokes(rect)
+        )
+    }
+
+    fun onSelectionEnd() {
+        _uiState.value = _uiState.value.copy(selectionRect = null)
+    }
+
+    fun deleteSelected() {
+        val indices = _uiState.value.selectedIndices
+        if (indices.isEmpty()) return
+        _uiState.value = _uiState.value.copy(
+            strokes = _uiState.value.strokes.filterIndexed { i, _ -> i !in indices },
+            selectedIndices = emptySet()
+        )
+        scheduleAutoSave()
+    }
+
+    fun clearSelection() {
+        _uiState.value = _uiState.value.copy(
+            selectedIndices = emptySet(),
+            selectionRect = null
+        )
+    }
+
+    // ── Layers ──
+
+    fun onActiveLayerChanged(index: Int) {
+        if (index in _uiState.value.layers.indices) {
+            _uiState.value = _uiState.value.copy(activeLayerIndex = index)
+        }
+    }
+
+    fun toggleLayerVisibility(index: Int) {
+        val state = _uiState.value
+        val layers = state.layers.toMutableList()
+        if (index in layers.indices) {
+            layers[index] = layers[index].copy(visible = !layers[index].visible)
+            _uiState.value = state.copy(layers = layers)
+            // If toggling off the active layer, switch to first visible layer
+            if (index == state.activeLayerIndex && !layers[index].visible) {
+                val firstVisible = layers.indexOfFirst { it.visible }
+                if (firstVisible >= 0) {
+                    _uiState.value = _uiState.value.copy(activeLayerIndex = firstVisible)
+                }
+            }
+        }
+    }
+
+    // ── Auto-save ──
 
     fun scheduleAutoSave() {
         autoSaveJob?.cancel()

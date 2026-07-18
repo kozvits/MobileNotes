@@ -20,11 +20,16 @@ import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +84,12 @@ fun HandwritingNoteScreen(
             localStrokes.clear()
             localStrokes.addAll(uiState.strokes)
         }
+    }
+
+    // Filter strokes by visible layers for rendering
+    val visibleStrokes = remember(localStrokes.toList(), uiState.layers) {
+        val visible = uiState.layers.indices.filter { uiState.layers[it].visible }.toSet()
+        localStrokes.filter { it.layerIndex in visible }
     }
 
     Scaffold(
@@ -162,16 +173,19 @@ fun HandwritingNoteScreen(
 
             // ── Drawing canvas ──
             DrawingCanvas(
-                strokes = localStrokes.toList(),
+                strokes = visibleStrokes,
                 currentPoints = currentPoints,
                 currentColor = when (uiState.drawingMode) {
                     DrawingMode.ERASER -> Color.White
                     DrawingMode.HIGHLIGHTER -> uiState.currentColor.copy(alpha = 0.45f)
                     DrawingMode.PEN -> uiState.currentColor
+                    DrawingMode.SELECT -> Color.Transparent
                 },
                 currentStrokeWidth = uiState.currentStrokeWidth,
                 drawingMode = uiState.drawingMode,
                 paperType = uiState.paperType,
+                selectedIndices = uiState.selectedIndices,
+                selectionRect = uiState.selectionRect,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -193,10 +207,74 @@ fun HandwritingNoteScreen(
                         viewModel.addStroke(stroke)
                     }
                     currentPoints = emptyList()
-                }
+                },
+                onSelectionUpdate = { viewModel.onSelectionUpdate(it) },
+                onSelectionEnd = { viewModel.onSelectionEnd() }
             )
 
             Divider()
+
+            // ── Layer selector bar ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                uiState.layers.forEachIndexed { index, layer ->
+                    val isActive = index == uiState.activeLayerIndex
+                    val strokeCount = uiState.strokes.count { it.layerIndex == index }
+                    FilledTonalButton(
+                        onClick = { viewModel.onActiveLayerChanged(index) },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (isActive)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.height(30.dp),
+                        contentPadding = ButtonDefaults.TextButtonContentPadding,
+                        enabled = layer.visible
+                    ) {
+                        Icon(
+                            Icons.Default.VisibilityOff,
+                            contentDescription = if (layer.visible) "Visible" else "Hidden",
+                            modifier = Modifier.size(14.dp),
+                            tint = if (layer.visible)
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            "${index + 1}",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        if (strokeCount > 0) {
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                "($strokeCount)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    // Toggle visibility
+                    FilledTonalIconButton(
+                        onClick = { viewModel.toggleLayerVisibility(index) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            if (layer.visible) Icons.Default.VisibilityOff else Icons.Default.VisibilityOff,
+                            contentDescription = if (layer.visible) "Hide layer" else "Show layer",
+                            modifier = Modifier.size(14.dp),
+                            tint = if (layer.visible)
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            }
 
             // ── Toolbar ──
             Column(
@@ -252,23 +330,26 @@ fun HandwritingNoteScreen(
 
                     Spacer(Modifier.width(4.dp))
 
-                    // Tool switch: Pen / Highlighter / Eraser
+                    // Tool switch: Pen / Highlighter / Eraser / Select
                     val toolIcon = when (uiState.drawingMode) {
                         DrawingMode.PEN -> Icons.Default.Brush
                         DrawingMode.HIGHLIGHTER -> Icons.Default.ColorLens
                         DrawingMode.ERASER -> Icons.Default.Close
+                        DrawingMode.SELECT -> Icons.Default.NearMe
                     }
                     val toolDesc = when (uiState.drawingMode) {
                         DrawingMode.PEN -> "Pen"
                         DrawingMode.HIGHLIGHTER -> "Highlighter"
                         DrawingMode.ERASER -> "Eraser"
+                        DrawingMode.SELECT -> "Select"
                     }
                     FilledTonalIconButton(
                         onClick = {
                             val next = when (uiState.drawingMode) {
                                 DrawingMode.PEN -> DrawingMode.HIGHLIGHTER
                                 DrawingMode.HIGHLIGHTER -> DrawingMode.ERASER
-                                DrawingMode.ERASER -> DrawingMode.PEN
+                                DrawingMode.ERASER -> DrawingMode.SELECT
+                                DrawingMode.SELECT -> DrawingMode.PEN
                             }
                             viewModel.setDrawingMode(next)
                             // Auto-select appropriate color when switching
@@ -284,10 +365,51 @@ fun HandwritingNoteScreen(
                             toolIcon,
                             contentDescription = toolDesc,
                             modifier = Modifier.size(20.dp),
-                            tint = if (uiState.drawingMode == DrawingMode.ERASER)
-                                MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = when (uiState.drawingMode) {
+                                DrawingMode.ERASER -> MaterialTheme.colorScheme.error
+                                DrawingMode.SELECT -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
+                    }
+                }
+
+                // Selection actions bar (shown when strokes are selected)
+                if (uiState.selectedIndices.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${uiState.selectedIndices.size} stroke(s) selected",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FilledTonalIconButton(
+                                onClick = { viewModel.deleteSelected() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.DeleteForever,
+                                    contentDescription = "Delete selected",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            FilledTonalIconButton(
+                                onClick = { viewModel.clearSelection() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Clear selection",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
 

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -62,6 +64,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.mobilenotes.app.domain.model.PaperType
 import java.io.File
 import java.io.FileOutputStream
@@ -77,7 +81,8 @@ data class StrokeData(
     val color: Color,
     val strokeWidth: Float,
     val isEraser: Boolean = false,
-    val isHighlighter: Boolean = false
+    val isHighlighter: Boolean = false,
+    val layerIndex: Int = 0
 )
 
 private fun StrokeData.toJson(): JSONObject = JSONObject().apply {
@@ -85,6 +90,7 @@ private fun StrokeData.toJson(): JSONObject = JSONObject().apply {
     put("w", strokeWidth.toDouble())
     put("e", isEraser)
     put("h", isHighlighter)
+    put("l", layerIndex)
     val pts = JSONArray()
     points.forEach { pt ->
         pts.put(JSONArray().apply {
@@ -107,7 +113,8 @@ private fun JSONObject.toStrokeData(): StrokeData {
         color = Color(getInt("c")),
         strokeWidth = getDouble("w").toFloat(),
         isEraser = optBoolean("e", false),
-        isHighlighter = optBoolean("h", false)
+        isHighlighter = optBoolean("h", false),
+        layerIndex = optInt("l", 0)
     )
 }
 
@@ -169,7 +176,7 @@ val HighlighterColors = listOf(
 )
 
 /** Drawing tool mode. */
-enum class DrawingMode { PEN, HIGHLIGHTER, ERASER }
+enum class DrawingMode { PEN, HIGHLIGHTER, ERASER, SELECT }
 
 val StrokeWidths = listOf(
     2f to "Fine",
@@ -308,8 +315,10 @@ private fun drawRuledOnBitmap(canvas: AndroidCanvas, w: Int, h: Int, scale: Floa
  * @param currentPoints currently-being-drawn points
  * @param currentColor active pen color
  * @param currentStrokeWidth active stroke width
- * @param drawingMode active tool: PEN, HIGHLIGHTER, or ERASER
+ * @param drawingMode active tool: PEN, HIGHLIGHTER, ERASER, SELECT
  * @param paperType background pattern
+ * @param selectedIndices indices of currently selected strokes
+ * @param selectionRect ongoing selection rectangle (nullable)
  * @param modifier
  */
 @Composable
@@ -320,10 +329,14 @@ fun DrawingCanvas(
     currentStrokeWidth: Float,
     drawingMode: DrawingMode,
     paperType: PaperType,
+    selectedIndices: Set<Int> = emptySet(),
+    selectionRect: Rect? = null,
     modifier: Modifier = Modifier,
     onStrokeStart: ((Offset) -> Unit)? = null,
     onStrokeMove: ((Offset) -> Unit)? = null,
     onStrokeEnd: (() -> Unit)? = null,
+    onSelectionUpdate: ((Rect) -> Unit)? = null,
+    onSelectionEnd: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -340,21 +353,54 @@ fun DrawingCanvas(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(true) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val down = awaitPointerEvent()
-                            val pos = down.changes.first().position
-                            onStrokeStart?.invoke(pos)
-
+                .pointerInput(drawingMode) {
+                    if (drawingMode == DrawingMode.SELECT) {
+                        // SELECT mode: track selection rectangle
+                        awaitPointerEventScope {
                             while (true) {
-                                val move = awaitPointerEvent()
-                                val change = move.changes.first()
-                                if (change.pressed) {
-                                    onStrokeMove?.invoke(change.position)
-                                } else {
-                                    onStrokeEnd?.invoke()
-                                    break
+                                val down = awaitPointerEvent()
+                                val startPos = down.changes.first().position
+                                var currentPos = startPos
+                                onStrokeStart?.invoke(startPos)
+
+                                while (true) {
+                                    val move = awaitPointerEvent()
+                                    val change = move.changes.first()
+                                    if (change.pressed) {
+                                        currentPos = change.position
+                                        val rect = Rect(
+                                            left = minOf(startPos.x, currentPos.x),
+                                            top = minOf(startPos.y, currentPos.y),
+                                            right = maxOf(startPos.x, currentPos.x),
+                                            bottom = maxOf(startPos.y, currentPos.y)
+                                        )
+                                        onSelectionUpdate?.invoke(rect)
+                                        onStrokeMove?.invoke(change.position)
+                                    } else {
+                                        onSelectionEnd?.invoke()
+                                        onStrokeEnd?.invoke()
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // PEN / HIGHLIGHTER / ERASER mode: track stroke path
+                        awaitPointerEventScope {
+                            while (true) {
+                                val down = awaitPointerEvent()
+                                val pos = down.changes.first().position
+                                onStrokeStart?.invoke(pos)
+
+                                while (true) {
+                                    val move = awaitPointerEvent()
+                                    val change = move.changes.first()
+                                    if (change.pressed) {
+                                        onStrokeMove?.invoke(change.position)
+                                    } else {
+                                        onStrokeEnd?.invoke()
+                                        break
+                                    }
                                 }
                             }
                         }
@@ -362,8 +408,8 @@ fun DrawingCanvas(
                 }
         ) {
             // Draw highlighter strokes first (behind pen strokes)
-            strokes.forEach { stroke ->
-                if (stroke.isEraser || !stroke.isHighlighter) return@forEach
+            strokes.forEachIndexed { index, stroke ->
+                if (stroke.isEraser || !stroke.isHighlighter) return@forEachIndexed
                 val path = stroke.points.toPath()
                 drawPath(
                     path = path,
@@ -375,10 +421,23 @@ fun DrawingCanvas(
                         join = StrokeJoin.Round
                     )
                 )
+                // Draw selection border on selected strokes
+                if (index in selectedIndices) {
+                    drawPath(
+                        path = path,
+                        color = Color(0xFF1976D2),
+                        alpha = 0.6f,
+                        style = Stroke(
+                            width = stroke.strokeWidth + 4f,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
             }
             // Draw pen strokes (non-eraser, non-highlighter)
-            strokes.forEach { stroke ->
-                if (stroke.isEraser || stroke.isHighlighter) return@forEach
+            strokes.forEachIndexed { index, stroke ->
+                if (stroke.isEraser || stroke.isHighlighter) return@forEachIndexed
                 val path = stroke.points.toPath()
                 drawPath(
                     path = path,
@@ -389,14 +448,46 @@ fun DrawingCanvas(
                         join = StrokeJoin.Round
                     )
                 )
+                // Draw selection border on selected strokes
+                if (index in selectedIndices) {
+                    drawPath(
+                        path = path,
+                        color = Color(0xFF1976D2),
+                        alpha = 0.6f,
+                        style = Stroke(
+                            width = stroke.strokeWidth + 4f,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
             }
 
-            // Draw current live stroke
-            if (currentPoints.size > 1) {
+            // Draw selection rectangle
+            if (selectionRect != null) {
+                drawRect(
+                    color = Color(0x201976D2),
+                    topLeft = selectionRect.topLeft,
+                    size = selectionRect.size
+                )
+                drawRect(
+                    color = Color(0xFF1976D2),
+                    topLeft = selectionRect.topLeft,
+                    size = selectionRect.size,
+                    style = Stroke(
+                        width = 2f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f))
+                    )
+                )
+            }
+
+            // Draw current live stroke (not in SELECT mode)
+            if (drawingMode != DrawingMode.SELECT && currentPoints.size > 1) {
                 val liveColor = when (drawingMode) {
                     DrawingMode.ERASER -> Color.White
                     DrawingMode.HIGHLIGHTER -> currentColor.copy(alpha = 0.45f)
                     DrawingMode.PEN -> currentColor
+                    DrawingMode.SELECT -> Color.Transparent
                 }
                 val path = currentPoints.toPath()
                 drawPath(
@@ -628,23 +719,26 @@ fun DrawingDialog(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Tool switch: Pen / Highlighter / Eraser
+                    // Tool switch: Pen / Highlighter / Eraser / Select
                     val toolIcon = when (drawingMode) {
                         DrawingMode.PEN -> Icons.Default.Brush
                         DrawingMode.HIGHLIGHTER -> Icons.Default.ColorLens
                         DrawingMode.ERASER -> Icons.Default.Close
+                        DrawingMode.SELECT -> Icons.Default.NearMe
                     }
                     val toolDesc = when (drawingMode) {
                         DrawingMode.PEN -> "Pen"
                         DrawingMode.HIGHLIGHTER -> "Highlighter"
                         DrawingMode.ERASER -> "Eraser"
+                        DrawingMode.SELECT -> "Select"
                     }
                     FilledTonalIconButton(
                         onClick = {
                             val next = when (drawingMode) {
                                 DrawingMode.PEN -> DrawingMode.HIGHLIGHTER
                                 DrawingMode.HIGHLIGHTER -> DrawingMode.ERASER
-                                DrawingMode.ERASER -> DrawingMode.PEN
+                                DrawingMode.ERASER -> DrawingMode.SELECT
+                                DrawingMode.SELECT -> DrawingMode.PEN
                             }
                             drawingMode = next
                             if (next == DrawingMode.HIGHLIGHTER) {
@@ -659,9 +753,11 @@ fun DrawingDialog(
                             toolIcon,
                             contentDescription = toolDesc,
                             modifier = Modifier.size(20.dp),
-                            tint = if (drawingMode == DrawingMode.ERASER)
-                                MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = when (drawingMode) {
+                                DrawingMode.ERASER -> MaterialTheme.colorScheme.error
+                                DrawingMode.SELECT -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                 }
