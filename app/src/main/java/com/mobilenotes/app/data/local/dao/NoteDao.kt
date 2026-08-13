@@ -49,6 +49,10 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE isDeleted = 0 AND isLocked = 0 ORDER BY isPinned DESC, updatedAt DESC")
     fun getUnlockedNotes(): Flow<List<NoteWithTags>>
 
+    @Transaction
+    @Query("SELECT * FROM notes WHERE isDeleted = 0 AND isLocked = 0 AND reminderTimestamp IS NOT NULL AND reminderTimestamp <= :now ORDER BY reminderTimestamp ASC")
+    fun getDueReminders(now: Long): Flow<List<NoteWithTags>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: NoteEntity)
 

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -787,6 +788,15 @@ private fun NoteListItem(
                             contentDescription = "Pinned",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    if (note.reminderTimestamp != null) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = "Reminder set",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }

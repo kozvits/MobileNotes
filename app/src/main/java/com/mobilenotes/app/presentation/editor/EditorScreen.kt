@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +48,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -75,6 +82,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilenotes.app.presentation.components.DrawingDialog
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 
 enum class MarkdownCommand {
     H1, H2, H3, BOLD, ITALIC, UNDERLINE, LIST, QUOTE, DIVIDER, DRAW, IMAGE
@@ -166,6 +179,10 @@ fun EditorScreen(
     var fullScreenImagePath by remember { mutableStateOf<String?>(null) }
     var showDrawingDialog by remember { mutableStateOf(false) }
     var showTagPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    // Intermediate calendar used to assemble the reminder timestamp from date + time.
+    var reminderCalendar by remember { mutableStateOf(java.util.Calendar.getInstance()) }
 
     // Pick an image from the gallery and embed it as [img:path]
     val imagePicker = rememberLauncherForActivityResult(
@@ -248,6 +265,15 @@ fun EditorScreen(
                 tags = uiState.tags,
                 onAddClick = { showTagPicker = true },
                 onRemove = { tag -> viewModel.onTagsChanged(uiState.tags - tag) }
+            )
+
+            Divider()
+
+            // Reminder row
+            ReminderRow(
+                reminderTimestamp = uiState.reminderTimestamp,
+                onPick = { showDatePicker = true },
+                onClear = { viewModel.onReminderChanged(null) }
             )
 
             Divider()
@@ -365,6 +391,70 @@ fun EditorScreen(
             currentTags = uiState.tags,
             onTagsChanged = { viewModel.onTagsChanged(it) },
             onDismiss = { showTagPicker = false }
+        )
+    }
+
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = uiState.reminderTimestamp ?: System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = dateState.selectedDateMillis
+                    if (millis != null) {
+                        val cal = java.util.Calendar.getInstance().apply {
+                            timeInMillis = reminderCalendar.timeInMillis
+                            set(java.util.Calendar.YEAR, dateState.selectedDateMillis!!.let {
+                                val c = java.util.Calendar.getInstance().apply { timeInMillis = it }
+                                c.get(java.util.Calendar.YEAR)
+                            })
+                            set(java.util.Calendar.MONTH, dateState.selectedDateMillis!!.let {
+                                val c = java.util.Calendar.getInstance().apply { timeInMillis = it }
+                                c.get(java.util.Calendar.MONTH)
+                            })
+                            set(java.util.Calendar.DAY_OF_MONTH, dateState.selectedDateMillis!!.let {
+                                val c = java.util.Calendar.getInstance().apply { timeInMillis = it }
+                                c.get(java.util.Calendar.DAY_OF_MONTH)
+                            })
+                        }
+                        reminderCalendar = cal
+                    }
+                    showDatePicker = false
+                    showTimePicker = true
+                }) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+
+    if (showTimePicker) {
+        val timeState = rememberTimePickerState(
+            initialHour = reminderCalendar.get(java.util.Calendar.HOUR_OF_DAY),
+            initialMinute = reminderCalendar.get(java.util.Calendar.MINUTE)
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cal = reminderCalendar
+                    cal.set(java.util.Calendar.HOUR_OF_DAY, timeState.hour)
+                    cal.set(java.util.Calendar.MINUTE, timeState.minute)
+                    cal.set(java.util.Calendar.SECOND, 0)
+                    cal.set(java.util.Calendar.MILLISECOND, 0)
+                    viewModel.onReminderChanged(cal.timeInMillis)
+                    showTimePicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+            },
+            text = { TimePicker(state = timeState) }
         )
     }
 }
@@ -496,5 +586,44 @@ private fun copyUriToInternalStorage(context: android.content.Context, uri: Uri)
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+@Composable
+private fun ReminderRow(
+    reminderTimestamp: Long?,
+    onPick: () -> Unit,
+    onClear: () -> Unit
+) {
+    val formatter = remember {
+        SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            if (reminderTimestamp != null) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+            contentDescription = "Reminder",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = if (reminderTimestamp != null) {
+                "Reminder: ${formatter.format(java.util.Date(reminderTimestamp))}"
+            } else {
+                "No reminder"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        if (reminderTimestamp != null) {
+            TextButton(onClick = onClear) { Text("Clear") }
+        }
+        TextButton(onClick = onPick) { Text(if (reminderTimestamp != null) "Change" else "Set") }
     }
 }

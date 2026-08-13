@@ -23,6 +23,7 @@ data class EditorUiState(
     val title: String = "",
     val content: String = "",
     val tags: List<Tag> = emptyList(),
+    val reminderTimestamp: Long? = null,
     val isNew: Boolean = true,
     val isSaving: Boolean = false,
     val lastSavedAt: Long? = null
@@ -58,6 +59,7 @@ class EditorViewModel @Inject constructor(
                         title = note.title,
                         content = note.content,
                         tags = note.tags,
+                        reminderTimestamp = note.reminderTimestamp,
                         isNew = false,
                         lastSavedAt = note.updatedAt
                     )
@@ -82,6 +84,11 @@ class EditorViewModel @Inject constructor(
         scheduleAutoSave()
     }
 
+    fun onReminderChanged(reminderTimestamp: Long?) {
+        _uiState.value = _uiState.value.copy(reminderTimestamp = reminderTimestamp)
+        scheduleAutoSave()
+    }
+
     fun scheduleAutoSave() {
         autoSaveJob?.cancel()
         autoSaveJob = viewModelScope.launch {
@@ -101,6 +108,7 @@ class EditorViewModel @Inject constructor(
                     title = state.title,
                     content = state.content,
                     tags = state.tags,
+                    reminderTimestamp = state.reminderTimestamp,
                     updatedAt = System.currentTimeMillis()
                 )
                 val result = updateNote(note)
