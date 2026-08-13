@@ -88,6 +88,9 @@ fun EditorScreen(
     // Drawing dialog
     var showDrawingDialog by remember { mutableStateOf(false) }
 
+    // Tag picker dialog
+    var showTagPicker by remember { mutableStateOf(false) }
+
     // Parse image/drawing markers from content
     val imagePaths = remember(uiState.content) {
         val regex = Regex("""\[(img|drawing):([^\]]+)\]""")
@@ -139,6 +142,17 @@ fun EditorScreen(
                 .padding(padding)
         ) {
             FormattingToolbar(onDrawingClick = { showDrawingDialog = true })
+
+            Divider()
+
+            // ---- Tags bar ----
+            TagBar(
+                tags = uiState.tags,
+                onAddClick = { showTagPicker = true },
+                onRemove = { tag ->
+                    viewModel.onTagsChanged(uiState.tags - tag)
+                }
+            )
 
             Divider()
 
@@ -242,6 +256,15 @@ fun EditorScreen(
                 viewModel.onContentChanged(uiState.content + "\n\n$marker")
                 viewModel.scheduleAutoSave()
             }
+        )
+    }
+
+    // ---- Tag picker dialog ----
+    if (showTagPicker) {
+        TagPickerDialog(
+            currentTags = uiState.tags,
+            onTagsChanged = { viewModel.onTagsChanged(it) },
+            onDismiss = { showTagPicker = false }
         )
     }
 }

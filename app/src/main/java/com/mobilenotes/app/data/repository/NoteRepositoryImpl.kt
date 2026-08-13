@@ -62,6 +62,9 @@ class NoteRepositoryImpl @Inject constructor(
         return try {
             val entity = note.toEntity()
             noteDao.insertNote(entity)
+            note.tags.forEach { tag ->
+                noteTagDao.insertCrossRef(NoteTagCrossRef(noteId = note.id, tagId = tag.id))
+            }
             Result.Success(note)
         } catch (e: Exception) {
             Result.Error("Failed to create note", e)

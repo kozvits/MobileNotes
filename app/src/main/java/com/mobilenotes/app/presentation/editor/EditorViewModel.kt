@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilenotes.app.domain.model.Note
+import com.mobilenotes.app.domain.model.Tag
 import com.mobilenotes.app.domain.usecase.CreateNote
 import com.mobilenotes.app.domain.usecase.GetNote
 import com.mobilenotes.app.domain.usecase.UpdateNote
@@ -21,6 +22,7 @@ data class EditorUiState(
     val noteId: String? = null,
     val title: String = "",
     val content: String = "",
+    val tags: List<Tag> = emptyList(),
     val isNew: Boolean = true,
     val isSaving: Boolean = false,
     val lastSavedAt: Long? = null
@@ -55,6 +57,7 @@ class EditorViewModel @Inject constructor(
                         noteId = note.id,
                         title = note.title,
                         content = note.content,
+                        tags = note.tags,
                         isNew = false,
                         lastSavedAt = note.updatedAt
                     )
@@ -71,6 +74,11 @@ class EditorViewModel @Inject constructor(
 
     fun onContentChanged(content: String) {
         _uiState.value = _uiState.value.copy(content = content)
+        scheduleAutoSave()
+    }
+
+    fun onTagsChanged(tags: List<Tag>) {
+        _uiState.value = _uiState.value.copy(tags = tags)
         scheduleAutoSave()
     }
 
@@ -92,6 +100,7 @@ class EditorViewModel @Inject constructor(
                     id = state.noteId,
                     title = state.title,
                     content = state.content,
+                    tags = state.tags,
                     updatedAt = System.currentTimeMillis()
                 )
                 val result = updateNote(note)
@@ -104,7 +113,8 @@ class EditorViewModel @Inject constructor(
             } else {
                 val result = createNote(
                     title = state.title,
-                    content = state.content
+                    content = state.content,
+                    tags = state.tags
                 )
                 if (result is com.mobilenotes.app.domain.model.Result.Success) {
                     isNotePersisted = true

@@ -17,6 +17,9 @@ interface TagDao {
     @Query("SELECT * FROM tags WHERE id = :id")
     suspend fun getTagById(id: String): TagEntity?
 
+    @Query("SELECT * FROM tags WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getTagByName(name: String): TagEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTag(tag: TagEntity)
 

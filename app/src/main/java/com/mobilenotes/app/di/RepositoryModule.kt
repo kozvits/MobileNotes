@@ -3,9 +3,11 @@ package com.mobilenotes.app.di
 import com.mobilenotes.app.data.repository.FolderRepositoryImpl
 import com.mobilenotes.app.data.repository.NoteRepositoryImpl
 import com.mobilenotes.app.data.repository.SettingsRepositoryImpl
+import com.mobilenotes.app.data.repository.TagRepositoryImpl
 import com.mobilenotes.app.domain.repository.FolderRepository
 import com.mobilenotes.app.domain.repository.NoteRepository
 import com.mobilenotes.app.domain.repository.SettingsRepository
+import com.mobilenotes.app.domain.repository.TagRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -33,4 +35,10 @@ abstract class RepositoryModule {
     abstract fun bindSettingsRepository(
         impl: SettingsRepositoryImpl
     ): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTagRepository(
+        impl: TagRepositoryImpl
+    ): TagRepository
 }
