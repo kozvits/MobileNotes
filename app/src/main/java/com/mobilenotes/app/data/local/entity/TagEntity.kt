@@ -8,5 +8,6 @@ import java.util.UUID
 data class TagEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val color: String? = null
+    val color: String? = null,
+    val emoji: String? = null
 )

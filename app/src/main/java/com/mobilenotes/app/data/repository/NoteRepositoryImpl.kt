@@ -73,14 +73,41 @@ class NoteRepositoryImpl @Inject constructor(
             val oldEntity = noteDao.getNoteById(note.id).first()
             val oldNote = oldEntity?.toDomain()
 
-            val entity = note.toEntity()
+            // Preserve fields the caller may not supply (EditorViewModel sends only
+            // title/content). Without this, folderId, pin/star, lock, reminder,
+            // createdAt and tags were wiped on every save.
+            val merged = if (oldNote != null) {
+                note.copy(
+                    folderId = note.folderId ?: oldNote.folderId,
+                    colorHex = note.colorHex ?: oldNote.colorHex,
+                    isPinned = note.isPinned || oldNote.isPinned,
+                    isStarred = note.isStarred || oldNote.isStarred,
+                    isLocked = note.isLocked || oldNote.isLocked,
+                    isDeleted = note.isDeleted || oldNote.isDeleted,
+                    reminderTimestamp = note.reminderTimestamp ?: oldNote.reminderTimestamp,
+                    createdAt = oldNote.createdAt,
+                    tags = note.tags.ifEmpty { oldNote.tags }
+                )
+            } else {
+                note
+            }
+
+            val entity = merged.toEntity()
             noteDao.updateNote(entity)
 
-            if (oldNote != null && (oldNote.title != note.title || oldNote.content != note.content)) {
+            // Keep tag cross-refs in sync (replace set) so re-insert does not duplicate.
+            noteTagDao.clearTagsForNote(merged.id)
+            merged.tags.forEach { tag ->
+                noteTagDao.insertCrossRef(
+                    NoteTagCrossRef(noteId = merged.id, tagId = tag.id)
+                )
+            }
+
+            if (oldNote != null && (oldNote.title != merged.title || oldNote.content != merged.content)) {
                 saveVersion(oldNote)
             }
 
-            Result.Success(note)
+            Result.Success(merged)
         } catch (e: Exception) {
             Result.Error("Failed to update note", e)
         }
@@ -165,7 +192,7 @@ class NoteRepositoryImpl @Inject constructor(
             createdAt = note.createdAt,
             updatedAt = note.updatedAt,
             syncedAt = note.syncedAt,
-            tags = tags.map { Tag(id = it.id, name = it.name, color = it.color) }
+            tags = tags.map { Tag(id = it.id, name = it.name, color = it.color, emoji = it.emoji) }
         )
     }
 
