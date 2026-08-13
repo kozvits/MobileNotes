@@ -34,10 +34,7 @@ class ReminderWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val now = System.currentTimeMillis()
-        val due = noteDao.getDueReminders(now).let { flow ->
-            // Collect the latest emission synchronously.
-            kotlinx.coroutines.flow.first(flow)
-        }
+        val due = noteDao.getDueReminders(now).first()
         for (noteWithTags in due) {
             showNotification(noteWithTags.note)
             // Clear the reminder so it fires only once.
