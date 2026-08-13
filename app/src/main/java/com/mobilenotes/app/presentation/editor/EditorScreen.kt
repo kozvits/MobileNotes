@@ -2,6 +2,8 @@ package com.mobilenotes.app.presentation.editor
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.HorizontalRule
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
@@ -74,7 +77,7 @@ import com.mobilenotes.app.presentation.components.DrawingDialog
 import java.io.File
 
 enum class MarkdownCommand {
-    H1, H2, H3, BOLD, ITALIC, UNDERLINE, LIST, QUOTE, DIVIDER, DRAW
+    H1, H2, H3, BOLD, ITALIC, UNDERLINE, LIST, QUOTE, DIVIDER, DRAW, IMAGE
 }
 
 /**
@@ -163,20 +166,36 @@ fun EditorScreen(
     var showDrawingDialog by remember { mutableStateOf(false) }
     var showTagPicker by remember { mutableStateOf(false) }
 
+    // Pick an image from the gallery and embed it as [img:path]
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            uri ?: return@rememberLauncherForActivityResult
+            val savedName = copyUriToInternalStorage(context, uri) ?: return@rememberLauncherForActivityResult
+            val marker = "[img:$savedName]"
+            val next = textFieldValue.copy(text = textFieldValue.text + "\n\n$marker")
+            textFieldValue = next
+            viewModel.onContentChanged(next.text)
+            viewModel.scheduleAutoSave()
+        }
+    )
+
     val imagePaths = remember(textFieldValue.text) {
         val regex = Regex("""\[(img|drawing):([^\]]+)\]""")
         regex.findAll(textFieldValue.text).map { it.groupValues[2] }.toList()
     }
 
     fun onFormat(command: MarkdownCommand) {
-        if (command == MarkdownCommand.DRAW) {
-            showDrawingDialog = true
-            return
+        when (command) {
+            MarkdownCommand.DRAW -> showDrawingDialog = true
+            MarkdownCommand.IMAGE -> imagePicker.launch("image/*")
+            else -> {
+                val next = applyMarkdownCommand(textFieldValue, command)
+                textFieldValue = next
+                viewModel.onContentChanged(next.text)
+                viewModel.scheduleAutoSave()
+            }
         }
-        val next = applyMarkdownCommand(textFieldValue, command)
-        textFieldValue = next
-        viewModel.onContentChanged(next.text)
-        viewModel.scheduleAutoSave()
     }
 
     Scaffold(
@@ -417,6 +436,7 @@ private fun FormattingToolbar(
         Icons.Default.FormatListBulleted to "List" to MarkdownCommand.LIST,
         Icons.Default.FormatQuote to "Quote" to MarkdownCommand.QUOTE,
         Icons.Default.HorizontalRule to "Divider" to MarkdownCommand.DIVIDER,
+        Icons.Default.Image to "Image" to MarkdownCommand.IMAGE,
         Icons.Default.Create to "Draw" to MarkdownCommand.DRAW
     )
     Row(
@@ -450,5 +470,30 @@ private fun FormatButton(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+/**
+ * Copy an image [Uri] picked from the gallery into the app's internal storage
+ * and return the relative file name (stored under [Context.filesDir]).
+ * Returns null if the copy fails.
+ */
+private fun copyUriToInternalStorage(context: android.content.Context, uri: Uri): String? {
+    return try {
+        val ext = when (context.contentResolver.getType(uri)) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        val name = "img_${System.currentTimeMillis()}.$ext"
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            context.openFileOutput(name, android.content.Context.MODE_PRIVATE).use { out ->
+                input.copyTo(out)
+            }
+        }
+        name
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }

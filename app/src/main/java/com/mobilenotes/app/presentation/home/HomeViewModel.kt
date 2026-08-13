@@ -95,9 +95,8 @@ class HomeViewModel @Inject constructor(
                 getAllFolders(),
                 _selectedFolderId,
                 _currentSection,
-                _selectedTag,
-                _isGridView
-            ) { allNotes, folders, selectedId, section, tag, isGridView ->
+                _selectedTag
+            ) { allNotes, folders, selectedId, section, tag ->
                 val filteredNotes = when (section) {
                     HomeSection.ALL_NOTES -> {
                         allNotes
@@ -148,11 +147,12 @@ class HomeViewModel @Inject constructor(
                     selectedFolderId = selectedId,
                     selectedFolder = selectedFolderObj,
                     isLoading = false,
-                    isGridView = isGridView,
                     currentSection = section,
                     tags = tagCounts,
                     selectedTag = if (section == HomeSection.TAGS) tag else null
                 )
+            }.combine(_isGridView) { state, isGridView ->
+                state.copy(isGridView = isGridView)
             }.collect { state ->
                 // Preserve dialog/menu state across updates
                 _uiState.value = state.copy(

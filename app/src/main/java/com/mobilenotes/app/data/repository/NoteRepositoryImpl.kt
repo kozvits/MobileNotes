@@ -4,6 +4,7 @@ import com.mobilenotes.app.data.local.dao.NoteDao
 import com.mobilenotes.app.data.local.dao.NoteTagDao
 import com.mobilenotes.app.data.local.dao.NoteVersionDao
 import com.mobilenotes.app.data.local.entity.NoteEntity
+import com.mobilenotes.app.data.local.entity.NoteTagCrossRef
 import com.mobilenotes.app.data.local.entity.NoteVersionEntity
 import com.mobilenotes.app.data.local.entity.NoteWithTags
 import com.mobilenotes.app.domain.model.Note
