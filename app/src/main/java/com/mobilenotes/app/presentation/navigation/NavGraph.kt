@@ -13,6 +13,8 @@ import androidx.navigation.navArgument
 import com.mobilenotes.app.presentation.editor.EditorScreen
 import com.mobilenotes.app.presentation.home.HomeScreen
 import com.mobilenotes.app.presentation.drawing.HandwritingNoteScreen
+import com.mobilenotes.app.presentation.search.SearchScreen
+import com.mobilenotes.app.presentation.settings.SettingsScreen
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -57,6 +59,23 @@ fun NavGraph(navController: NavHostController) {
             val noteId = backStackEntry.arguments?.getString("noteId")
             HandwritingNoteScreen(
                 noteId = noteId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Search.route) {
+            SearchScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToNote = { noteId ->
+                    // The editor opens the note by id; it detects handwriting vs text
+                    // from the stored content prefix on load.
+                    navController.navigate(Screen.Editor.createRoute(noteId))
+                }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

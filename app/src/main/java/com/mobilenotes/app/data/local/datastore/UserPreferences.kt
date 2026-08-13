@@ -1,6 +1,8 @@
 package com.mobilenotes.app.data.local.datastore
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -9,59 +11,48 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "user_preferences")
+/**
+ * DataStore-backed user preferences. Persists UI/settings so they survive
+ * process death (previously isGridView was held in-memory only in HomeViewModel).
+ */
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
 
 class UserPreferences(private val context: Context) {
 
-    companion object {
-        private val THEME_MODE = stringPreferencesKey("theme_mode")
-        private val VIEW_MODE = intPreferencesKey("view_mode")
-        private val AUTO_SAVE_INTERVAL = intPreferencesKey("auto_save_interval")
-        private val IS_SYNC_ENABLED = booleanPreferencesKey("is_sync_enabled")
-        private val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
-        private val APP_LOCK_PIN = stringPreferencesKey("app_lock_pin")
+    private object Keys {
+        val IS_GRID_VIEW = booleanPreferencesKey("is_grid_view")
+        val DEFAULT_PAPER_TYPE = stringPreferencesKey("default_paper_type")
+        val SORT_ORDER = intPreferencesKey("sort_order")
+        val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
+        val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
     }
 
-    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[THEME_MODE] ?: "system"
+    val isGridView: Flow<Boolean> = context.dataStore.data.map { it[Keys.IS_GRID_VIEW] ?: false }
+    val defaultPaperType: Flow<String> =
+        context.dataStore.data.map { it[Keys.DEFAULT_PAPER_TYPE] ?: "GRID" }
+    val sortOrder: Flow<Int> = context.dataStore.data.map { it[Keys.SORT_ORDER] ?: 0 }
+    val useDynamicColor: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.USE_DYNAMIC_COLOR] ?: true }
+    val appLockEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[Keys.APP_LOCK_ENABLED] ?: false }
+
+    suspend fun setGridView(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IS_GRID_VIEW] = enabled }
     }
 
-    val viewMode: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[VIEW_MODE] ?: 0
+    suspend fun setDefaultPaperType(type: String) {
+        context.dataStore.edit { it[Keys.DEFAULT_PAPER_TYPE] = type }
     }
 
-    val isSyncEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[IS_SYNC_ENABLED] ?: false
+    suspend fun setSortOrder(order: Int) {
+        context.dataStore.edit { it[Keys.SORT_ORDER] = order }
     }
 
-    val appLockEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[APP_LOCK_ENABLED] ?: false
-    }
-
-    val appLockPin: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[APP_LOCK_PIN]
-    }
-
-    suspend fun setThemeMode(mode: String) {
-        context.dataStore.edit { prefs -> prefs[THEME_MODE] = mode }
-    }
-
-    suspend fun setViewMode(mode: Int) {
-        context.dataStore.edit { prefs -> prefs[VIEW_MODE] = mode }
-    }
-
-    suspend fun setSyncEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[IS_SYNC_ENABLED] = enabled }
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.USE_DYNAMIC_COLOR] = enabled }
     }
 
     suspend fun setAppLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[APP_LOCK_ENABLED] = enabled }
-    }
-
-    suspend fun setAppLockPin(pin: String?) {
-        context.dataStore.edit { prefs ->
-            if (pin != null) prefs[APP_LOCK_PIN] = pin
-            else prefs.remove(APP_LOCK_PIN)
-        }
+        context.dataStore.edit { it[Keys.APP_LOCK_ENABLED] = enabled }
     }
 }

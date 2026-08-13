@@ -18,6 +18,7 @@ import com.mobilenotes.app.domain.usecase.RestoreNote
 import com.mobilenotes.app.domain.usecase.TogglePin
 import com.mobilenotes.app.domain.usecase.ToggleStar
 import com.mobilenotes.app.domain.usecase.UpdateNote
+import com.mobilenotes.app.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +67,8 @@ class HomeViewModel @Inject constructor(
     private val createFolder: CreateFolder,
     private val deleteFolder: DeleteFolder,
     private val renameFolder: RenameFolder,
-    private val updateNote: UpdateNote
+    private val updateNote: UpdateNote,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -75,20 +77,27 @@ class HomeViewModel @Inject constructor(
     private val _selectedFolderId = MutableStateFlow<String?>(null)
     private val _currentSection = MutableStateFlow(HomeSection.ALL_NOTES)
     private val _selectedTag = MutableStateFlow<String?>(null)
+    private val _isGridView = MutableStateFlow(false)
 
     /** Emits a note ID when UI should navigate to editor for it */
     private val _navigateToEditor = MutableStateFlow<String?>(null)
     val navigateToEditor: StateFlow<String?> = _navigateToEditor.asStateFlow()
 
     init {
+        // Initialise grid-view preference from persistent settings (DataStore).
+        viewModelScope.launch {
+            settingsRepository.getSettings().collect { _isGridView.value = it.isGridView }
+        }
+
         viewModelScope.launch {
             combine(
                 getAllNotes(),
                 getAllFolders(),
                 _selectedFolderId,
                 _currentSection,
-                _selectedTag
-            ) { allNotes, folders, selectedId, section, tag ->
+                _selectedTag,
+                _isGridView
+            ) { allNotes, folders, selectedId, section, tag, isGridView ->
                 val filteredNotes = when (section) {
                     HomeSection.ALL_NOTES -> {
                         allNotes
@@ -139,7 +148,7 @@ class HomeViewModel @Inject constructor(
                     selectedFolderId = selectedId,
                     selectedFolder = selectedFolderObj,
                     isLoading = false,
-                    isGridView = _uiState.value.isGridView,
+                    isGridView = isGridView,
                     currentSection = section,
                     tags = tagCounts,
                     selectedTag = if (section == HomeSection.TAGS) tag else null
@@ -169,7 +178,11 @@ class HomeViewModel @Inject constructor(
     }
 
     fun toggleViewMode() {
-        _uiState.value = _uiState.value.copy(isGridView = !_uiState.value.isGridView)
+        viewModelScope.launch {
+            val next = !_isGridView.value
+            _isGridView.value = next
+            settingsRepository.setGridView(next)
+        }
     }
 
     fun selectSection(section: HomeSection) {
