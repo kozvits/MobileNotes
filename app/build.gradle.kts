@@ -101,6 +101,9 @@ dependencies {
     // WorkManager (reminders)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")

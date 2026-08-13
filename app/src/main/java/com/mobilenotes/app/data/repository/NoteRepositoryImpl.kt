@@ -166,6 +166,19 @@ class NoteRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setNoteLock(id: String, locked: Boolean): Result<Unit> {
+        return try {
+            val oldEntity = noteDao.getNoteById(id).first()
+            val oldNote = oldEntity?.toDomain()
+            if (oldNote != null) {
+                noteDao.updateNote(oldNote.copy(isLocked = locked).toEntity())
+            }
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error("Failed to set lock", e)
+        }
+    }
+
     private suspend fun saveVersion(note: Note) {
         try {
             val versionNumber = noteVersionDao.getLatestVersionNumber(note.id) + 1

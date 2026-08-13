@@ -20,4 +20,5 @@ interface NoteRepository {
     suspend fun restoreNote(id: String): Result<Unit>
     suspend fun togglePin(id: String): Result<Unit>
     suspend fun toggleStar(id: String): Result<Unit>
+    suspend fun setNoteLock(id: String, locked: Boolean): Result<Unit>
 }

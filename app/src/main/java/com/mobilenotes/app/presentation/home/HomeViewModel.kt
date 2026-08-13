@@ -17,6 +17,7 @@ import com.mobilenotes.app.domain.usecase.RenameFolder
 import com.mobilenotes.app.domain.usecase.RestoreNote
 import com.mobilenotes.app.domain.usecase.TogglePin
 import com.mobilenotes.app.domain.usecase.ToggleStar
+import com.mobilenotes.app.domain.usecase.SetNoteLock
 import com.mobilenotes.app.domain.usecase.UpdateNote
 import com.mobilenotes.app.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -64,6 +65,7 @@ class HomeViewModel @Inject constructor(
     private val restoreNote: RestoreNote,
     private val togglePin: TogglePin,
     private val toggleStar: ToggleStar,
+    private val setNoteLock: SetNoteLock,
     private val createFolder: CreateFolder,
     private val deleteFolder: DeleteFolder,
     private val renameFolder: RenameFolder,
@@ -253,6 +255,13 @@ class HomeViewModel @Inject constructor(
     fun onDeleteNotePermanently(noteId: String) {
         viewModelScope.launch {
             deleteNotePermanently(noteId)
+        }
+        dismissContextMenu()
+    }
+
+    fun onToggleLock(note: Note) {
+        viewModelScope.launch {
+            setNoteLock(note.id, !note.isLocked)
         }
         dismissContextMenu()
     }

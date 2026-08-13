@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
@@ -98,10 +100,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.fragment.app.FragmentActivity
 import com.mobilenotes.app.domain.model.Folder
 import com.mobilenotes.app.domain.model.Note
+import com.mobilenotes.app.presentation.utils.authenticateWithBiometrics
 import com.mobilenotes.app.presentation.utils.shareNote
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -118,6 +122,19 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val activity = context as? FragmentActivity
+
+    // Opens a note, requiring biometric auth first if it is locked.
+    fun openNote(note: Note) {
+        if (note.isLocked && activity != null) {
+            activity.authenticateWithBiometrics(
+                onSuccess = { onNavigateToEditor(note.id) },
+                onError = { /* keep note closed */ }
+            )
+        } else {
+            onNavigateToEditor(note.id)
+        }
+    }
 
     var showFolderPanel by remember { mutableStateOf(true) }
     var showFabMenu by remember { mutableStateOf(false) }
@@ -562,7 +579,7 @@ fun HomeScreen(
                                     } else if (note.content.startsWith("[handwriting/v2]")) {
                                         onNavigateToHandwriting(note.id)
                                     } else {
-                                        onNavigateToEditor(note.id)
+                                        openNote(note)
                                     }
                                 },
                                 onLongClick = { viewModel.showNoteContextMenu(note) }
@@ -584,7 +601,7 @@ fun HomeScreen(
                                     } else if (note.content.startsWith("[handwriting/v2]")) {
                                         onNavigateToHandwriting(note.id)
                                     } else {
-                                        onNavigateToEditor(note.id)
+                                        openNote(note)
                                     }
                                 },
                                 onLongClick = { viewModel.showNoteContextMenu(note) }
@@ -607,7 +624,8 @@ fun HomeScreen(
         onDelete = { viewModel.onDeleteNote(it.id) },
         onRestore = { viewModel.onRestoreNote(it.id) },
         onDeletePermanently = { viewModel.onDeleteNotePermanently(it.id) },
-        onShare = { shareNote(context, it) }
+        onShare = { shareNote(context, it) },
+        onToggleLock = { viewModel.onToggleLock(it) }
     )
 
     // ---- Folder context menu ----
@@ -926,7 +944,8 @@ private fun NoteContextMenu(
     onDelete: (Note) -> Unit,
     onRestore: (Note) -> Unit = {},
     onDeletePermanently: (Note) -> Unit = {},
-    onShare: (Note) -> Unit = {}
+    onShare: (Note) -> Unit = {},
+    onToggleLock: (Note) -> Unit = {}
 ) {
     if (note != null) {
         DropdownMenu(
@@ -970,6 +989,16 @@ private fun NoteContextMenu(
                     text = { Text("Share") },
                     onClick = { onShare(note) },
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text(if (note.isLocked) "Unlock" else "Lock") },
+                    onClick = { onToggleLock(note) },
+                    leadingIcon = {
+                        Icon(
+                            if (note.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                            contentDescription = null
+                        )
+                    }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
