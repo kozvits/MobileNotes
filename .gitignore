@@ -54,3 +54,6 @@ app/schemas/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Keep the Gradle wrapper jar under version control (needed for CI / fresh clones)
+!gradle/wrapper/gradle-wrapper.jar
