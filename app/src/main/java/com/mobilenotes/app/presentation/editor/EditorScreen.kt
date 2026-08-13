@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatQuote
-import androidx.compose.material.icons.filled.FormatUnderlined
 import androidx.compose.material.icons.filled.HorizontalRule
 import androidx.compose.material.icons.filled.Looks3
 import androidx.compose.material.icons.filled.LooksOne
@@ -56,8 +55,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +73,66 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilenotes.app.presentation.components.DrawingDialog
 import java.io.File
 
+enum class MarkdownCommand {
+    H1, H2, H3, BOLD, ITALIC, UNDERLINE, LIST, QUOTE, DIVIDER, DRAW
+}
+
+/**
+ * Apply a markdown formatting command to the current selection.
+ * When no text is selected, markers are inserted at the cursor and the
+ * cursor is placed between them (so typing continues inside).
+ */
+private fun applyMarkdownCommand(
+    value: TextFieldValue,
+    command: MarkdownCommand
+): TextFieldValue {
+    val text = value.text
+    val sel = value.selection
+    val start = sel.start.coerceIn(0, text.length)
+    val end = sel.end.coerceIn(0, text.length)
+    val selected = text.substring(start, end)
+
+    fun wrap(prefix: String, suffix: String = prefix, blockPrefix: String = ""): TextFieldValue {
+        val newText = buildString {
+            append(text.substring(0, start))
+            append(prefix)
+            append(selected)
+            append(suffix)
+            append(text.substring(end))
+        }
+        val caret = start + prefix.length + selected.length + suffix.length
+        return TextFieldValue(
+            text = newText,
+            selection = TextRange(if (selected.isEmpty()) start + prefix.length else caret)
+        )
+    }
+
+    fun linePrefix(prefix: String): TextFieldValue {
+        // Find line start of selection
+        val lineStart = text.lastIndexOf('\n', start - 1) + 1
+        val newText = buildString {
+            append(text.substring(0, lineStart))
+            append(prefix)
+            append(text.substring(lineStart))
+        }
+        val caret = end + prefix.length
+        return TextFieldValue(text = newText, selection = TextRange(caret))
+    }
+
+    return when (command) {
+        MarkdownCommand.H1 -> linePrefix("# ")
+        MarkdownCommand.H2 -> linePrefix("## ")
+        MarkdownCommand.H3 -> linePrefix("### ")
+        MarkdownCommand.BOLD -> wrap("**")
+        MarkdownCommand.ITALIC -> wrap("*")
+        MarkdownCommand.UNDERLINE -> wrap("__")
+        MarkdownCommand.LIST -> linePrefix("- ")
+        MarkdownCommand.QUOTE -> linePrefix("> ")
+        MarkdownCommand.DIVIDER -> wrap("\n\n---\n\n")
+        MarkdownCommand.DRAW -> value // handled by caller (opens dialog)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
@@ -82,19 +143,40 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(uiState.content))
+    }
+    var titleValue by remember { mutableStateOf(TextFieldValue(uiState.title)) }
+
+    // Sync from loaded note (only when not actively editing to avoid cursor jumps)
+    LaunchedEffect(uiState.noteId, uiState.content) {
+        if (textFieldValue.text != uiState.content && !uiState.isNew) {
+            textFieldValue = TextFieldValue(uiState.content)
+        }
+    }
+    LaunchedEffect(uiState.title) {
+        if (titleValue.text != uiState.title) titleValue = TextFieldValue(uiState.title)
+    }
+
     // Full-screen image viewer
     var fullScreenImagePath by remember { mutableStateOf<String?>(null) }
-
-    // Drawing dialog
     var showDrawingDialog by remember { mutableStateOf(false) }
-
-    // Tag picker dialog
     var showTagPicker by remember { mutableStateOf(false) }
 
-    // Parse image/drawing markers from content
-    val imagePaths = remember(uiState.content) {
+    val imagePaths = remember(textFieldValue.text) {
         val regex = Regex("""\[(img|drawing):([^\]]+)\]""")
-        regex.findAll(uiState.content).map { it.groupValues[2] }.toList()
+        regex.findAll(textFieldValue.text).map { it.groupValues[2] }.toList()
+    }
+
+    fun onFormat(command: MarkdownCommand) {
+        if (command == MarkdownCommand.DRAW) {
+            showDrawingDialog = true
+            return
+        }
+        val next = applyMarkdownCommand(textFieldValue, command)
+        textFieldValue = next
+        viewModel.onContentChanged(next.text)
+        viewModel.scheduleAutoSave()
     }
 
     Scaffold(
@@ -111,10 +193,7 @@ fun EditorScreen(
                         viewModel.saveOnExit()
                         onNavigateBack()
                     }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -141,17 +220,14 @@ fun EditorScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            FormattingToolbar(onDrawingClick = { showDrawingDialog = true })
+            FormattingToolbar(onFormat = ::onFormat)
 
             Divider()
 
-            // ---- Tags bar ----
             TagBar(
                 tags = uiState.tags,
                 onAddClick = { showTagPicker = true },
-                onRemove = { tag ->
-                    viewModel.onTagsChanged(uiState.tags - tag)
-                }
+                onRemove = { tag -> viewModel.onTagsChanged(uiState.tags - tag) }
             )
 
             Divider()
@@ -164,16 +240,18 @@ fun EditorScreen(
             ) {
                 Spacer(Modifier.height(8.dp))
 
-                // Title field
                 BasicTextField(
-                    value = uiState.title,
-                    onValueChange = { viewModel.onTitleChanged(it) },
+                    value = titleValue,
+                    onValueChange = {
+                        titleValue = it
+                        viewModel.onTitleChanged(it.text)
+                    },
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
                         color = MaterialTheme.colorScheme.onSurface
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
-                        if (uiState.title.isEmpty()) {
+                        if (titleValue.text.isEmpty()) {
                             Text(
                                 "Title",
                                 style = MaterialTheme.typography.headlineSmall,
@@ -187,17 +265,19 @@ fun EditorScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // Content field
                 BasicTextField(
-                    value = uiState.content,
-                    onValueChange = { viewModel.onContentChanged(it) },
+                    value = textFieldValue,
+                    onValueChange = {
+                        textFieldValue = it
+                        viewModel.onContentChanged(it.text)
+                    },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 28.sp
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
-                        if (uiState.content.isEmpty()) {
+                        if (textFieldValue.text.isEmpty()) {
                             Text(
                                 "Start writing...",
                                 style = MaterialTheme.typography.bodyLarge,
@@ -209,7 +289,6 @@ fun EditorScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // ---- Embedded images & drawings ----
                 if (imagePaths.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     imagePaths.forEach { path ->
@@ -239,7 +318,6 @@ fun EditorScreen(
         }
     }
 
-    // ---- Full-screen image dialog ----
     if (fullScreenImagePath != null) {
         FullScreenImageDialog(
             imagePath = fullScreenImagePath!!,
@@ -247,19 +325,21 @@ fun EditorScreen(
         )
     }
 
-    // ---- Drawing dialog ----
     if (showDrawingDialog) {
         DrawingDialog(
             onDismiss = { showDrawingDialog = false },
             onSave = { filePath ->
                 val marker = "[drawing:$filePath]"
-                viewModel.onContentChanged(uiState.content + "\n\n$marker")
+                val next = textFieldValue.copy(
+                    text = textFieldValue.text + "\n\n$marker"
+                )
+                textFieldValue = next
+                viewModel.onContentChanged(next.text)
                 viewModel.scheduleAutoSave()
             }
         )
     }
 
-    // ---- Tag picker dialog ----
     if (showTagPicker) {
         TagPickerDialog(
             currentTags = uiState.tags,
@@ -304,7 +384,6 @@ private fun FullScreenImageDialog(
                 }
             }
 
-            // Close button
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
@@ -327,33 +406,37 @@ private fun FullScreenImageDialog(
 
 @Composable
 private fun FormattingToolbar(
-    onDrawingClick: () -> Unit = {}
+    onFormat: (MarkdownCommand) -> Unit
 ) {
+    val items = listOf(
+        Icons.Default.LooksOne to "H1" to MarkdownCommand.H1,
+        Icons.Default.LooksTwo to "H2" to MarkdownCommand.H2,
+        Icons.Default.Looks3 to "H3" to MarkdownCommand.H3,
+        Icons.Default.FormatBold to "Bold" to MarkdownCommand.BOLD,
+        Icons.Default.FormatItalic to "Italic" to MarkdownCommand.ITALIC,
+        Icons.Default.FormatListBulleted to "List" to MarkdownCommand.LIST,
+        Icons.Default.FormatQuote to "Quote" to MarkdownCommand.QUOTE,
+        Icons.Default.HorizontalRule to "Divider" to MarkdownCommand.DIVIDER,
+        Icons.Default.Create to "Draw" to MarkdownCommand.DRAW
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        FormatButton(Icons.Default.LooksOne, "H1") { /* toggle heading 1 */ }
-        FormatButton(Icons.Default.LooksTwo, "H2") { /* toggle heading 2 */ }
-        FormatButton(Icons.Default.Looks3, "H3") { /* toggle heading 3 */ }
-        FormatButton(Icons.Default.FormatBold, "Bold") { /* toggle bold */ }
-        FormatButton(Icons.Default.FormatItalic, "Italic") { /* toggle italic */ }
-        FormatButton(Icons.Default.FormatUnderlined, "Underline") { /* toggle underline */ }
-        FormatButton(Icons.Default.FormatListBulleted, "List") { /* toggle list */ }
-        FormatButton(Icons.Default.FormatQuote, "Quote") { /* toggle quote */ }
-        FormatButton(Icons.Default.HorizontalRule, "Divider") { /* insert divider */ }
-        // Handwriting button
-        FormatButton(Icons.Default.Create, "Draw") { onDrawingClick() }
+        items.forEach { (iconLabel, cmd) ->
+            val (icon, label) = iconLabel
+            FormatButton(icon, label) { onFormat(cmd) }
+        }
     }
 }
 
 @Composable
 private fun FormatButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     description: String,
     onClick: () -> Unit
 ) {

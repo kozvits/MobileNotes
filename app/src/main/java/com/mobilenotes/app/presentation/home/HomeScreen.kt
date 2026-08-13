@@ -101,6 +101,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mobilenotes.app.domain.model.Folder
 import com.mobilenotes.app.domain.model.Note
+import com.mobilenotes.app.presentation.utils.shareNote
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -604,7 +605,8 @@ fun HomeScreen(
         onMoveToFolder = { viewModel.showMoveNoteDialog(it) },
         onDelete = { viewModel.onDeleteNote(it.id) },
         onRestore = { viewModel.onRestoreNote(it.id) },
-        onDeletePermanently = { viewModel.onDeleteNotePermanently(it.id) }
+        onDeletePermanently = { viewModel.onDeleteNotePermanently(it.id) },
+        onShare = { shareNote(context, it) }
     )
 
     // ---- Folder context menu ----
@@ -913,7 +915,8 @@ private fun NoteContextMenu(
     onMoveToFolder: (Note) -> Unit,
     onDelete: (Note) -> Unit,
     onRestore: (Note) -> Unit = {},
-    onDeletePermanently: (Note) -> Unit = {}
+    onDeletePermanently: (Note) -> Unit = {},
+    onShare: (Note) -> Unit = {}
 ) {
     if (note != null) {
         DropdownMenu(
@@ -955,7 +958,7 @@ private fun NoteContextMenu(
                 )
                 DropdownMenuItem(
                     text = { Text("Share") },
-                    onClick = { onDismiss() },
+                    onClick = { onShare(note) },
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) }
                 )
                 DropdownMenuItem(
