@@ -104,6 +104,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.fragment.app.FragmentActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.mobilenotes.app.domain.model.Folder
 import com.mobilenotes.app.domain.model.Note
 import com.mobilenotes.app.presentation.utils.authenticateWithBiometrics
