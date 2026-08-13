@@ -133,6 +133,7 @@ private fun applyMarkdownCommand(
         MarkdownCommand.QUOTE -> linePrefix("> ")
         MarkdownCommand.DIVIDER -> wrap("\n\n---\n\n")
         MarkdownCommand.DRAW -> value // handled by caller (opens dialog)
+        MarkdownCommand.IMAGE -> value // handled by caller (opens gallery picker)
     }
 }
 
